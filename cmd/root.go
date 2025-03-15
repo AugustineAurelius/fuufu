@@ -6,23 +6,29 @@ package cmd
 import (
 	"os"
 
+	"github.com/AugustineAurelius/fuufu/internal/config"
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "fuufu",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application.`,
-}
-
 func Execute() {
+	rootCmd := createRootCMD()
+
+	manager := config.NewManager(rootCmd)
+
+	rootCmd.AddCommand(createServeCMD(manager), createMigrateCMD(manager))
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
-func init() {
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func createRootCMD() *cobra.Command {
+	var rootCmd = &cobra.Command{
+		Use:   "fuufu",
+		Short: "Our family app",
+	}
+
+	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to a configuration file")
+	return rootCmd
 }

@@ -1,3 +1,3 @@
 package common
 
-//go:generate eos generator common -ltm
+// comment go:generate eos generator common -l

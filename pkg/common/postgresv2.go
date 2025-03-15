@@ -11,58 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
-
-	"go.opentelemetry.io/otel/metric"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
-type PostgresConnectionProvider struct {
-	URL string
-}
-
-func (p *PostgresConnectionProvider) GetConnectionURL() string {
-	return p.URL
+type PostgresConnectionProvider interface {
+	URL() string
 }
 
 type PostgresDB struct {
 	Pool *pgxpool.Pool
 
 	logger logger
-
-	telemetry tracer
-
-	queryCount      int64Counter
-	execCount       int64Counter
-	queryRowCounter int64Counter
 }
 
 func NewPostgres(ctx context.Context, provider PostgresConnectionProvider,
 
 	logger logger,
 
-	telemetry tracer,
-
-	metrics metricProvider,
-
 ) (PostgresDB, error) {
-	url := provider.GetConnectionURL()
-	pool, err := pgxpool.New(ctx, url)
-	if err != nil {
-		return PostgresDB{}, err
-	}
+	url := provider.URL()
 
-	queryCount, err := metrics.Int64Counter("queryCount", metric.WithDescription("Postgres"))
-	if err != nil {
-		return PostgresDB{}, err
-	}
-	execCount, err := metrics.Int64Counter("execCount", metric.WithDescription("Postgres"))
-	if err != nil {
-		return PostgresDB{}, err
-	}
-	queryRowCounter, err := metrics.Int64Counter("queryRowCounter", metric.WithDescription("Postgres"))
+	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		return PostgresDB{}, err
 	}
@@ -70,12 +38,6 @@ func NewPostgres(ctx context.Context, provider PostgresConnectionProvider,
 	return PostgresDB{Pool: pool,
 
 		logger: logger,
-
-		telemetry: telemetry,
-
-		queryCount:      queryCount,
-		execCount:       execCount,
-		queryRowCounter: queryRowCounter,
 	}, nil
 }
 
@@ -86,9 +48,6 @@ func (db *PostgresDB) Close() error {
 
 func (db *PostgresDB) QueryRow(ctx context.Context, query string, args ...any) row {
 
-	ctx, span := db.telemetry.Start(ctx, "QueryRow", trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
-	defer span.End()
-
 	start := time.Now()
 	db.logger.Info("Executing QueryRow", zap.String("query", query))
 
@@ -97,24 +56,16 @@ func (db *PostgresDB) QueryRow(ctx context.Context, query string, args ...any) r
 	duration := time.Since(start).Seconds()
 	db.logger.Info("QueryRow succeeded", zap.Float64("duration", duration))
 
-	db.queryRowCounter.Add(ctx, 1)
-
 	return &PostgresRow{row}
 }
 
 func (db *PostgresDB) Query(ctx context.Context, query string, args ...any) (rows, error) {
-
-	ctx, span := db.telemetry.Start(ctx, "Query", trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
-	defer span.End()
 
 	start := time.Now()
 	db.logger.Info("Executing Query", zap.String("query", query))
 
 	rows, err := db.Pool.Query(ctx, ReplaceQuestions(query), args...)
 	if err != nil {
-
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
 
 		db.logger.Error("Query failed", zap.Error(err))
 
@@ -124,24 +75,16 @@ func (db *PostgresDB) Query(ctx context.Context, query string, args ...any) (row
 	duration := time.Since(start).Seconds()
 	db.logger.Info("Query succeeded", zap.Float64("duration", duration))
 
-	db.queryCount.Add(ctx, 1)
-
 	return &PostgresRows{rows}, nil
 }
 
 func (db *PostgresDB) Exec(ctx context.Context, query string, args ...any) (result, error) {
-
-	ctx, span := db.telemetry.Start(ctx, "Exec", trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
-	defer span.End()
 
 	start := time.Now()
 	db.logger.Info("Executing Exec", zap.String("query", query))
 
 	r, err := db.Pool.Exec(ctx, ReplaceQuestions(query), args...)
 	if err != nil {
-
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
 
 		db.logger.Error("Exec failed", zap.Error(err))
 
@@ -150,8 +93,6 @@ func (db *PostgresDB) Exec(ctx context.Context, query string, args ...any) (resu
 
 	duration := time.Since(start).Seconds()
 	db.logger.Info("Exec succeeded", zap.Float64("duration", duration))
-
-	db.execCount.Add(ctx, 1)
 
 	return &PostgresResult{r}, err
 }

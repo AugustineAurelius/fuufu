@@ -1,0 +1,49 @@
+version: "3.8"  # Updated version for better compatibility
+
+services:
+  postgresql-master:
+    image: docker.io/bitnami/postgresql:17
+    ports:
+      - '5432:5432'
+    volumes:
+      - 'postgresql_master_data:/bitnami/postgresql'
+    environment:
+      - POSTGRESQL_PGAUDIT_LOG=READ,WRITE
+      - POSTGRESQL_LOG_HOSTNAME=true
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_DATABASE=postgres
+      - POSTGRESQL_PASSWORD=postgres
+    healthcheck:
+      test: pg_isready -U postgres -d postgres
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgresql-slave:
+    image: docker.io/bitnami/postgresql:17
+    ports:
+      - '5433:5432'
+    depends_on:
+      postgresql-master:
+        condition: service_healthy
+    volumes: 
+      - 'postgresql_slave_data:/bitnami/postgresql'
+    environment:
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=postgres
+      - POSTGRESQL_MASTER_HOST=postgresql-master
+      - POSTGRESQL_PGAUDIT_LOG=READ
+      - POSTGRESQL_LOG_HOSTNAME=true
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+
+volumes:
+  postgresql_master_data:
+    driver: local
+  postgresql_slave_data: 
+    driver: local

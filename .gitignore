@@ -1,2 +1,7 @@
 tmp/
 internal/config/config.yaml
+# Added by goreleaser init:
+dist/
+.env
+.vscode/
+bin/
