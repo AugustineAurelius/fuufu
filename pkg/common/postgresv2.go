@@ -2,42 +2,64 @@
 package common
 
 import (
-	"context"
+    "context"
+    "time"
 	"regexp"
 	"strconv"
-	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
+    "github.com/jackc/pgx/v5"
+    "github.com/jackc/pgx/v5/pgconn"
+    "github.com/jackc/pgx/v5/pgxpool"
+    "go.uber.org/zap"
+	
+	
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+    
 )
+
+
 
 type PostgresConnectionProvider interface {
 	URL() string
 }
 
 type PostgresDB struct {
-	Pool *pgxpool.Pool
-
+    Pool     *pgxpool.Pool
+	
 	logger logger
+	
+	
+	telemetry tracer
+	
+    
 }
 
 func NewPostgres(ctx context.Context, provider PostgresConnectionProvider,
-
+	
 	logger logger,
-
+	
+	
+	telemetry tracer, 
+	
+	
 ) (PostgresDB, error) {
 	url := provider.URL()
-
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		return PostgresDB{}, err
 	}
-
+	
 	return PostgresDB{Pool: pool,
+		
+		logger:          logger,
+		
+		
+		telemetry:       telemetry,
+		
+		
 
-		logger: logger,
 	}, nil
 }
 
@@ -46,55 +68,80 @@ func (db *PostgresDB) Close() error {
 	return nil
 }
 
-func (db *PostgresDB) QueryRow(ctx context.Context, query string, args ...any) row {
 
+func (db *PostgresDB) QueryRow(ctx context.Context, query string, args ...any) row{
+	
+	ctx, span := db.telemetry.Start(ctx, "QueryRow",trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
+	defer span.End()
+    
+	
 	start := time.Now()
 	db.logger.Info("Executing QueryRow", zap.String("query", query))
-
+	
 	row := db.Pool.QueryRow(ctx, ReplaceQuestions(query), args...)
-
+	
 	duration := time.Since(start).Seconds()
 	db.logger.Info("QueryRow succeeded", zap.Float64("duration", duration))
+	
+	
 
 	return &PostgresRow{row}
 }
 
 func (db *PostgresDB) Query(ctx context.Context, query string, args ...any) (rows, error) {
-
-	start := time.Now()
-	db.logger.Info("Executing Query", zap.String("query", query))
-
+	
+	ctx, span := db.telemetry.Start(ctx, "Query",trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
+	defer span.End()
+    
+	
+    start := time.Now()
+    db.logger.Info("Executing Query", zap.String("query", query))
+	
 	rows, err := db.Pool.Query(ctx, ReplaceQuestions(query), args...)
 	if err != nil {
-
-		db.logger.Error("Query failed", zap.Error(err))
-
+		
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+        
+		
+        db.logger.Error("Query failed", zap.Error(err))
+		
 		return nil, err
 	}
-
+	
 	duration := time.Since(start).Seconds()
-	db.logger.Info("Query succeeded", zap.Float64("duration", duration))
-
+    db.logger.Info("Query succeeded", zap.Float64("duration", duration))
+	
+	
 	return &PostgresRows{rows}, nil
 }
 
 func (db *PostgresDB) Exec(ctx context.Context, query string, args ...any) (result, error) {
-
+    
+    ctx, span := db.telemetry.Start(ctx, "Exec",trace.WithAttributes(attribute.String("query", query), attribute.String("db_type", "Postgres")))
+    defer span.End()
+    
+	
 	start := time.Now()
-	db.logger.Info("Executing Exec", zap.String("query", query))
-
-	r, err := db.Pool.Exec(ctx, ReplaceQuestions(query), args...)
-	if err != nil {
-
-		db.logger.Error("Exec failed", zap.Error(err))
-
+    db.logger.Info("Executing Exec", zap.String("query", query))
+	
+    r, err := db.Pool.Exec(ctx, ReplaceQuestions(query), args...)
+    if err != nil {
+        
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+        
+		
+        db.logger.Error("Exec failed", zap.Error(err))
+		
 		return nil, err
-	}
-
-	duration := time.Since(start).Seconds()
-	db.logger.Info("Exec succeeded", zap.Float64("duration", duration))
-
-	return &PostgresResult{r}, err
+    } 
+	
+    duration := time.Since(start).Seconds()
+    db.logger.Info("Exec succeeded", zap.Float64("duration", duration))
+	
+	
+    return &PostgresResult{r}, err
 }
 
 func (db *PostgresDB) BeginTransaction(ctx context.Context) (Tx, error) {
@@ -112,6 +159,7 @@ type PostgresRow struct {
 func (db *PostgresRow) Scan(dest ...any) error {
 	return db.Row.Scan(dest...)
 }
+
 
 type PostgresRows struct {
 	pgx.Rows
@@ -171,11 +219,12 @@ func (r *PostgresResult) RowsAffected() (int64, error) {
 	return r.CommandTag.RowsAffected(), nil
 }
 
+
 func ReplaceQuestions(query string) string {
-	var count int
-	re := regexp.MustCompile(`\?`)
-	return re.ReplaceAllStringFunc(query, func(s string) string {
-		count++
-		return "$" + strconv.Itoa(count)
-	})
+    var count int
+    re := regexp.MustCompile(`\?`)
+    return re.ReplaceAllStringFunc(query, func(s string) string {
+        count++
+        return "$" + strconv.Itoa(count)
+    })
 }

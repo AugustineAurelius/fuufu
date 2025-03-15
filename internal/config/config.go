@@ -1,7 +1,8 @@
 package config
 
 type Fuufu struct {
-	PostgresConfig Postgres
-	PostgresSlave  Postgres
-	LoggerConfig   Logger
+	PostgresConfig  Postgres
+	PostgresSlave   Postgres
+	LoggerConfig    Logger
+	CollectorConfig Collector
 }

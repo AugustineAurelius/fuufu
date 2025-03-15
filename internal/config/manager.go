@@ -58,6 +58,9 @@ func (man Manager) addConfigs() {
 
 	man.addConfigBool("logging.debug", true, "Enable debug logging")
 	man.addConfigBool("logging.json", false, "Prints all logs in json format")
+
+	man.addConfigString("collector.host", "localhost", "Host for otel collector")
+	man.addConfigInt("collector.port", 4317, "Port for otel collector")
 }
 
 func (man Manager) LoadConfig() Fuufu {
@@ -87,6 +90,10 @@ func (man Manager) LoadConfig() Fuufu {
 		LoggerConfig: Logger{
 			Debug: man.getConfigBool("logging.debug"),
 			Json:  man.getConfigBool("logging.json"),
+		},
+		CollectorConfig: Collector{
+			Host: man.getConfigString("collector.host"),
+			Port: man.getConfigInt("collector.port"),
 		},
 	}
 	return cfg

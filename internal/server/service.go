@@ -6,17 +6,22 @@ import (
 	"github.com/AugustineAurelius/fuufu/api/todo"
 	todo_repository "github.com/AugustineAurelius/fuufu/internal/repository/todo"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type TodoHandler struct {
 	todo.StrictServerInterface
 
-	Repo *todo_repository.Repository
+	Repo      *todo_repository.Repository
+	Telemetry trace.Tracer
 }
 
 // Get Todo list
 // (GET /api/v1/todo)
 func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosRequestObject) (todo.GetAllTodosResponseObject, error) {
+	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.GetAllTodos")
+	defer span.End()
+
 	todos, err := h.Repo.GetMany(ctx, todo_repository.NewFilter())
 	if err != nil {
 		return todo.GetAllTodos500JSONResponse{
@@ -47,6 +52,8 @@ func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosR
 // Creates a new task
 // (POST /api/v1/todo)
 func (h *TodoHandler) CreateNewTask(ctx context.Context, request todo.CreateNewTaskRequestObject) (todo.CreateNewTaskResponseObject, error) {
+	ctx, span := h.Telemetry.Start(ctx, "CreateNewTask")
+	defer span.End()
 
 	id := uuid.New()
 	err := h.Repo.Create(ctx, &todo_repository.Task{
