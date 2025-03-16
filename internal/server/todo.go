@@ -6,6 +6,7 @@ import (
 	"github.com/AugustineAurelius/fuufu/api/todo"
 	todo_repository "github.com/AugustineAurelius/fuufu/internal/repository/todo"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -52,10 +53,17 @@ func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosR
 // Creates a new task
 // (POST /api/v1/todo)
 func (h *TodoHandler) CreateNewTask(ctx context.Context, request todo.CreateNewTaskRequestObject) (todo.CreateNewTaskResponseObject, error) {
-	ctx, span := h.Telemetry.Start(ctx, "CreateNewTask")
+	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.CreateNewTask", trace.WithAttributes(
+		attribute.String("created_by", string(request.Body.CreatedBy)),
+		attribute.String("doer", string(request.Body.Doer)),
+		attribute.String("name", request.Body.Name),
+		attribute.Bool("repeateble", request.Body.Repeatable),
+	))
 	defer span.End()
 
 	id := uuid.New()
+	span.SetAttributes(attribute.Stringer("todo_id", id))
+
 	err := h.Repo.Create(ctx, &todo_repository.Task{
 		ID:          id,
 		CreatedBy:   string(request.Body.CreatedBy),
@@ -80,5 +88,25 @@ func (h *TodoHandler) CreateNewTask(ctx context.Context, request todo.CreateNewT
 // Get task by todo_id
 // (GET /api/v1/todo/{todo_id})
 func (h *TodoHandler) GetTaskByID(ctx context.Context, request todo.GetTaskByIDRequestObject) (todo.GetTaskByIDResponseObject, error) {
-	return todo.GetTaskByID200JSONResponse{}, nil
+	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.GetTodoByID", trace.WithAttributes(
+		attribute.Stringer("todo_id", request.TodoId),
+	))
+	defer span.End()
+
+	todoOne, err := h.Repo.Get(ctx, request.TodoId)
+	if err != nil {
+		return todo.GetTaskByID500JSONResponse{
+			Error: err.Error(),
+		}, nil
+	}
+
+	return todo.GetTaskByID200JSONResponse{
+		CreatedBy:   todo.WeAll(todoOne.CreatedBy),
+		Description: todoOne.Description,
+		DoBefore:    *todoOne.DoBefore,
+		Doer:        todo.WeAll(todoOne.Doer),
+		Name:        todoOne.Name,
+		Range:       todoOne.RepeatAfter,
+		Repeatable:  todoOne.Repeatable,
+	}, nil
 }

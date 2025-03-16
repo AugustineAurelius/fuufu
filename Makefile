@@ -25,12 +25,14 @@ import:
 
 api:
 	oapi-codegen --config=api/todo/config.yaml api/todo/api.yaml
+	oapi-codegen --config=api/auth/config.yaml api/auth/api.yaml
 
 air:
 	air -c .air.toml
 
 air-serve:
 	air -c .air.toml -build.bin=tmp\\main.exe serve -c=internal/config/config.yaml
+	
 
 release:
 	goreleaser release

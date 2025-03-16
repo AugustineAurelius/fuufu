@@ -4,14 +4,16 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/AugustineAurelius/fuufu/api/auth"
 	"github.com/AugustineAurelius/fuufu/api/todo"
 	"github.com/AugustineAurelius/fuufu/frontend"
-	"github.com/AugustineAurelius/fuufu/internal/analytic"
 	"github.com/AugustineAurelius/fuufu/internal/config"
 	todo_repository "github.com/AugustineAurelius/fuufu/internal/repository/todo"
+	user_repository "github.com/AugustineAurelius/fuufu/internal/repository/user"
 	"github.com/AugustineAurelius/fuufu/internal/server"
 	"github.com/AugustineAurelius/fuufu/pkg/common"
 	"github.com/AugustineAurelius/fuufu/pkg/middleware"
+	"github.com/AugustineAurelius/fuufu/pkg/migration"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -32,24 +34,33 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log := getLogger(manager)
 
+			if err := migration.CheckMigrations(cmd.Context(), manager.LoadPostgres()); err != nil {
+				log.Error(err.Error())
+				return
+			}
+
 			conn, err := initCollector(manager)
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 
 			res, err := resource.New(cmd.Context(), resource.WithAttributes(serviceName))
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 
 			shutdownTracerProvider, err := initTracerProvider(cmd.Context(), res, conn)
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 
 			shutdownMetricProvider, err := initMeterProvider(cmd.Context(), res, conn)
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 			defer func() {
 				shutdownTracerProvider(cmd.Context())
@@ -71,47 +82,59 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			otel.SetMeterProvider(meterProvider)
 			err = runtime.Start()
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 			postgresMasterConfig := manager.LoadPostgres()
-			log.Sugar().Infof("get postgres connection url: %s", postgresMasterConfig.URL())
-
 			postgresSlaveConfig := manager.LoadPostgresSlave()
-			log.Sugar().Infof("get postgres connection url: %s", postgresSlaveConfig.URL())
 
 			pgMaster, err := common.NewPostgres(cmd.Context(), postgresMasterConfig, log, tracer)
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 			if err = pgMaster.Pool.Ping(cmd.Context()); err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
+			log.Info("successfully conected to postgresMaster")
 
 			pgSlave, err := common.NewPostgres(cmd.Context(), postgresSlaveConfig, log, tracer)
 			if err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
 			if err = pgSlave.Pool.Ping(cmd.Context()); err != nil {
-				log.Panic(err.Error())
+				log.Error(err.Error())
+				return
 			}
+			log.Info("successfully conected to postgresSlave")
 
 			todoRepository := todo_repository.New(&pgMaster)
+			userRepository := user_repository.New(&pgMaster)
 
-			analitic := analytic.Analytic{
-				Meter:    meter,
-				TodoRepo: todoRepository,
-			}
+			// analitic := analytic.Analytic{
+			// 	Meter:    meter,
+			// 	TodoRepo: todoRepository,
+			// }
 
-			go func() {
-				err = analitic.Run(cmd.Context())
-				if err != nil {
-					log.Panic(err.Error())
-				}
-			}()
+			// go func() {
+			// 	err = analitic.Run(cmd.Context())
+			// 	if err != nil {
+			// 		log.Error(err.Error())
+			// 		return
+			// 	}
+			// }()
 
 			todoHandlers := todo.NewStrictHandler(&server.TodoHandler{
 				Repo:      todoRepository,
 				Telemetry: tracer,
+			}, nil)
+
+			authHadnlers := auth.NewStrictHandler(&server.AuthHandler{
+				Repo:      userRepository,
+				Telemetry: tracer,
+				Secret:    "superSecret",
 			}, nil)
 
 			r := http.NewServeMux()
@@ -120,7 +143,9 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			h = middleware.TracingMiddleware(tracer, h)
 			h = middleware.MetricMiddleware(meter, h)
 			h = middleware.LoggingMiddleware(log, h)
+			h = middleware.AuthMiddleware("superSecret", h)
 			r.Handle("/metrics", promhttp.Handler())
+			h = auth.HandlerFromMux(authHadnlers, r)
 
 			frontend.RegisterFrontend(r)
 

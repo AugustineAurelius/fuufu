@@ -8,21 +8,16 @@ import (
 )
 
 func init() {
-	goose.AddMigrationContext(upCreateTodo, downCreateTodo)
+	goose.AddMigrationContext(upDdlForUser, downDdlForUser)
 }
 
-func upCreateTodo(ctx context.Context, tx *sql.Tx) error {
+func upDdlForUser(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `
-	CREATE TABLE tasks (
+	CREATE TABLE users (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		name VARCHAR NOT NULL,
-		description VARCHAR,
-		created_by VARCHAR NOT NULL,
-		doer VARCHAR NOT NULL,
-		done BOOLEAN NOT NULL DEFAULT false,
-		repeatable BOOLEAN NOT NULL DEFAULT false,
-		repeat_after INTEGER,
-		do_before TIMESTAMPTZ,
+		email VARCHAR NOT NULL,
+		hashed_password VARCHAR NOT NULL,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMPTZ
 	);
@@ -36,17 +31,17 @@ func upCreateTodo(ctx context.Context, tx *sql.Tx) error {
 	$$ LANGUAGE plpgsql;
 
 	CREATE TRIGGER update_task_updated_at
-	BEFORE UPDATE ON tasks
+	BEFORE UPDATE ON users
 	FOR EACH ROW
 	EXECUTE FUNCTION update_updated_at_column();
 `)
 	return err
 }
 
-func downCreateTodo(ctx context.Context, tx *sql.Tx) error {
+func downDdlForUser(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `
-	DROP TRIGGER IF EXISTS update_task_updated_at ON tasks;
-	DROP TABLE IF EXISTS tasks;
+	DROP TRIGGER IF EXISTS update_task_updated_at ON users;
+	DROP TABLE IF EXISTS users;
 	`)
 	return err
 }
