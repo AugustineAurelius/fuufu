@@ -10,12 +10,22 @@ import (
 	"github.com/google/uuid"
 )
 
-type Repository struct {
+type CommandRepository struct {
 	db common.Querier
 }
 
-func New(db common.Querier) *Repository {
-	return &Repository{
+type QueryRepository struct {
+	db common.Querier
+}
+
+func NewCommand(db common.Querier) *CommandRepository {
+	return &CommandRepository{
+		db: db,
+	}
+}
+
+func NewQuery(db common.Querier) *QueryRepository {
+	return &QueryRepository{
 		db: db,
 	}
 }

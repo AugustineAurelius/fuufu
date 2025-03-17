@@ -16,7 +16,7 @@ import (
 type AuthHandler struct {
 	auth.StrictServerInterface
 
-	Repo      *user_repository.Repository
+	Repo      *user_repository.CommandRepository
 	Telemetry trace.Tracer
 
 	Secret string
@@ -36,23 +36,16 @@ func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.Post
 	))
 	defer span.End()
 
-	users, err := h.Repo.GetMany(ctx, user_repository.NewFilter(
+	user, err := h.Repo.Get(ctx,
 		user_repository.WithName(request.Body.Username),
-	))
+	)
 	if err != nil {
 		return auth.PostApiV1AuthSignin500JSONResponse{
 			Error: err.Error(),
 		}, nil
 	}
 
-	if len(users) != 1 {
-		return auth.PostApiV1AuthSignin401JSONResponse{
-			Error: "User with this username not found",
-		}, nil
-	}
-
-	in, _ := users.GetFirst()
-	if err := bcrypt.CompareHashAndPassword([]byte(in.HashedPassword), []byte(request.Body.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(request.Body.Password)); err != nil {
 		return auth.PostApiV1AuthSignin500JSONResponse{
 			Error: err.Error(),
 		}, nil
@@ -60,7 +53,7 @@ func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.Post
 
 	expireTime := time.Now().Add(24 * time.Hour)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": in.Name,
+		"username": user.Name,
 		"exp":      expireTime.Unix(),
 	})
 

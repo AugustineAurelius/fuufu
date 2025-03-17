@@ -6,32 +6,19 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/google/uuid"
 )
 
 // DeleteTask deletes a Task by ID.
-func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	query, args := sq.Delete(TableTask).
-		Where(sq.Eq{ColumnTaskID: id}).PlaceholderFormat(sq.Question).MustSql()
-
+func (r *CommandRepository) Delete(ctx context.Context, opts ...FilterOpt) error {
+	b := sq.Delete(TableTask).PlaceholderFormat(sq.Question)
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+	query, args := b.MustSql()
 	if _, err := r.db.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("failed to exec delete query %s with args %v error = %w", query, args, err)
 	}
 	return nil
-}
-
-// DeleteManyTask retrieves a Task by filter.
-func (r *Repository) DeleteMany(ctx context.Context, f Filter) error {
-	b := sq.Delete(TableTask).PlaceholderFormat(sq.Question)
-
-	b = ApplyWhere(b, f)
-
-	query, args := b.MustSql()
-
-	_, err := r.db.Exec(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("error querying database: %w", err)
-	}
-
-	return err
 }

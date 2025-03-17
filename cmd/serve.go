@@ -110,8 +110,8 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			}
 			log.Info("successfully conected to postgresSlave")
 
-			todoRepository := todo_repository.New(&pgMaster)
-			userRepository := user_repository.New(&pgMaster)
+			todoRepository := todo_repository.NewCommand(&pgMaster)
+			userRepository := user_repository.NewCommand(&pgMaster)
 
 			// analitic := analytic.Analytic{
 			// 	Meter:    meter,
@@ -139,15 +139,14 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 
 			r := http.NewServeMux()
 			h := todo.HandlerFromMux(todoHandlers, r)
-
-			h = middleware.TracingMiddleware(tracer, h)
-			h = middleware.MetricMiddleware(meter, h)
-			h = middleware.LoggingMiddleware(log, h)
 			h = middleware.AuthMiddleware("superSecret", h)
 			r.Handle("/metrics", promhttp.Handler())
 			h = auth.HandlerFromMux(authHadnlers, r)
 
 			frontend.RegisterFrontend(r)
+			h = middleware.LoggingMiddleware(log, h)
+			h = middleware.MetricMiddleware(meter, h)
+			h = middleware.TracingMiddleware(tracer, h)
 
 			s := &http.Server{
 				Handler: h,

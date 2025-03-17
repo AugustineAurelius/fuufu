@@ -13,7 +13,7 @@ import (
 type TodoHandler struct {
 	todo.StrictServerInterface
 
-	Repo      *todo_repository.Repository
+	Repo      *todo_repository.CommandRepository
 	Telemetry trace.Tracer
 }
 
@@ -23,7 +23,7 @@ func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosR
 	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.GetAllTodos")
 	defer span.End()
 
-	todos, err := h.Repo.GetMany(ctx, todo_repository.NewFilter())
+	todos, err := h.Repo.GetMany(ctx)
 	if err != nil {
 		return todo.GetAllTodos500JSONResponse{
 			Error: err.Error(),
@@ -93,7 +93,7 @@ func (h *TodoHandler) GetTaskByID(ctx context.Context, request todo.GetTaskByIDR
 	))
 	defer span.End()
 
-	todoOne, err := h.Repo.Get(ctx, request.TodoId)
+	todoOne, err := h.Repo.Get(ctx, todo_repository.WithID(request.TodoId))
 	if err != nil {
 		return todo.GetTaskByID500JSONResponse{
 			Error: err.Error(),

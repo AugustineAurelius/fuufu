@@ -6,12 +6,11 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/google/uuid"
 )
 
 // GetTask retrieves a Task by ID.
-func (r *Repository) Get(ctx context.Context, id uuid.UUID) (*Task, error) {
-	query, args := sq.Select(
+func (r *CommandRepository) Get(ctx context.Context, opts ...FilterOpt) (*Task, error) {
+	b := sq.Select(
 		ColumnTaskID,
 		ColumnTaskName,
 		ColumnTaskDescription,
@@ -24,8 +23,59 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (*Task, error) {
 		ColumnTaskCreatedAt,
 		ColumnTaskUpdatedAt,
 	).
-		From(TableTask).
-		Where(sq.Eq{ColumnTaskID: id}).PlaceholderFormat(sq.Question).MustSql()
+		From(TableTask).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+
+	query, args := b.MustSql()
+
+	var task Task
+	err := r.db.QueryRow(ctx, query, args...).Scan(
+		&task.ID,
+		&task.Name,
+		&task.Description,
+		&task.CreatedBy,
+		&task.Doer,
+		&task.Done,
+		&task.Repeatable,
+		&task.RepeatAfter,
+		&task.DoBefore,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get query %s with args %v error = %w", query, args, err)
+	}
+
+	return &task, err
+}
+func (r *QueryRepository) Get(ctx context.Context, opts ...FilterOpt) (*Task, error) {
+	b := sq.Select(
+		ColumnTaskID,
+		ColumnTaskName,
+		ColumnTaskDescription,
+		ColumnTaskCreatedBy,
+		ColumnTaskDoer,
+		ColumnTaskDone,
+		ColumnTaskRepeatable,
+		ColumnTaskRepeatAfter,
+		ColumnTaskDoBefore,
+		ColumnTaskCreatedAt,
+		ColumnTaskUpdatedAt,
+	).
+		From(TableTask).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+
+	query, args := b.MustSql()
 
 	var task Task
 	err := r.db.QueryRow(ctx, query, args...).Scan(
@@ -49,7 +99,7 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (*Task, error) {
 }
 
 // GetManyTask retrieves a Task by filter.
-func (r *Repository) GetMany(ctx context.Context, f Filter) (Tasks, error) {
+func (r *CommandRepository) GetMany(ctx context.Context, opts ...FilterOpt) (Tasks, error) {
 	b := sq.Select(
 		ColumnTaskID,
 		ColumnTaskName,
@@ -64,10 +114,70 @@ func (r *Repository) GetMany(ctx context.Context, f Filter) (Tasks, error) {
 		ColumnTaskUpdatedAt,
 	).From(TableTask).PlaceholderFormat(sq.Question)
 
-	b = ApplyWhere(b, f)
-
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
 	query, args := b.MustSql()
+	var tasks Tasks
 
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error querying database: %w", err)
+	}
+	defer rows.Close()
+
+	var taskModel TaskModel
+	for rows.Next() {
+		err := rows.Scan(
+			&taskModel.ID,
+			&taskModel.Name,
+			&taskModel.Description,
+			&taskModel.CreatedBy,
+			&taskModel.Doer,
+			&taskModel.Done,
+			&taskModel.Repeatable,
+			&taskModel.RepeatAfter,
+			&taskModel.DoBefore,
+			&taskModel.CreatedAt,
+			&taskModel.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		tasks = append(tasks, ReverseConverter(taskModel))
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", rows.Err())
+	}
+
+	return tasks, err
+}
+
+// GetManyTask retrieves a Task by filter.
+func (r *QueryRepository) GetMany(ctx context.Context, opts ...FilterOpt) (Tasks, error) {
+	b := sq.Select(
+		ColumnTaskID,
+		ColumnTaskName,
+		ColumnTaskDescription,
+		ColumnTaskCreatedBy,
+		ColumnTaskDoer,
+		ColumnTaskDone,
+		ColumnTaskRepeatable,
+		ColumnTaskRepeatAfter,
+		ColumnTaskDoBefore,
+		ColumnTaskCreatedAt,
+		ColumnTaskUpdatedAt,
+	).From(TableTask).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+	query, args := b.MustSql()
 	var tasks Tasks
 
 	rows, err := r.db.Query(ctx, query, args...)

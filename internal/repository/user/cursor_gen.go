@@ -3,21 +3,21 @@ package user
 
 import (
 	"context"
-	"fmt"
 	"errors"
-	common "github.com/AugustineAurelius/fuufu/pkg/common" 
+	"fmt"
 
+	common "github.com/AugustineAurelius/fuufu/pkg/common"
 
 	sq "github.com/Masterminds/squirrel"
 )
 
 // builderParams represents optional query parameters.
 type BuilderParams struct {
-	OrderBy   *string // Column and direction for sorting (e.g., "id ASC")
-	SearchCol *string // Column to search in (e.g., "name")
+	OrderBy    *string // Column and direction for sorting (e.g., "id ASC")
+	SearchCol  *string // Column to search in (e.g., "name")
 	SearchTerm *string // Term to search for (e.g., "alice")
-	Offset    *int    // Initial offset for pagination
-	Limit     *int    // Number of rows to fetch per batch
+	Offset     *int    // Initial offset for pagination
+	Limit      *int    // Number of rows to fetch per batch
 	MaxRows    *int
 }
 
@@ -30,11 +30,11 @@ type Cursor struct {
 	limit     int
 	params    BuilderParams
 	ctx       context.Context
-	totalRows int 
-	closed    bool 
+	totalRows int
+	closed    bool
 }
 
-func (r *Repository) NewCursor(ctx context.Context, f Filter, params BuilderParams) *Cursor {
+func (r *CommandRepository) NewCursor(ctx context.Context, params BuilderParams, opts ...FilterOpt) *Cursor {
 	limit := 10
 	if params.Limit != nil {
 		limit = *params.Limit
@@ -54,17 +54,61 @@ func (r *Repository) NewCursor(ctx context.Context, f Filter, params BuilderPara
 		ColumnUserUpdatedAt,
 	).From(TableUser).PlaceholderFormat(sq.Question)
 
-	b = ApplyWhere(b, f)
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
 
 	return &Cursor{
 		pool:      r.db,
 		builder:   b,
 		rows:      make([]UserModel, 0, limit),
-		index:    -1,
-		offset:   offset,
-		limit:    limit,
-		params:   params,
-		ctx:      ctx,
+		index:     -1,
+		offset:    offset,
+		limit:     limit,
+		params:    params,
+		ctx:       ctx,
+		totalRows: 0,
+		closed:    false,
+	}
+}
+
+func (r *QueryRepository) NewCursor(ctx context.Context, params BuilderParams, opts ...FilterOpt) *Cursor {
+	limit := 10
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+
+	offset := 0
+	if params.Offset != nil {
+		offset = *params.Offset
+	}
+
+	b := sq.Select(
+		ColumnUserID,
+		ColumnUserName,
+		ColumnUserEmail,
+		ColumnUserHashedPassword,
+		ColumnUserCreatedAt,
+		ColumnUserUpdatedAt,
+	).From(TableUser).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+
+	return &Cursor{
+		pool:      r.db,
+		builder:   b,
+		rows:      make([]UserModel, 0, limit),
+		index:     -1,
+		offset:    offset,
+		limit:     limit,
+		params:    params,
+		ctx:       ctx,
 		totalRows: 0,
 		closed:    false,
 	}
@@ -92,7 +136,7 @@ func (c *Cursor) fetchRows() error {
 	if c.params.MaxRows != nil {
 		remainingRows = *c.params.MaxRows - c.totalRows
 		if remainingRows <= 0 {
-			return nil 		
+			return nil
 		}
 		if remainingRows > c.limit {
 			remainingRows = c.limit
@@ -112,7 +156,7 @@ func (c *Cursor) fetchRows() error {
 	}
 	defer rows.Close()
 
-	c.rows = make([]UserModel, 0,c.limit)
+	c.rows = make([]UserModel, 0, c.limit)
 	for rows.Next() {
 		var item UserModel
 		err := rows.Scan(
@@ -176,7 +220,7 @@ func (c *Cursor) Current() (UserModel, error) {
 	if c.index >= 0 && c.index < len(c.rows) {
 		return c.rows[c.index], nil
 	}
-	return UserModel{} , errors.New("not found")
+	return UserModel{}, errors.New("not found")
 }
 
 func (c *Cursor) Reset() {

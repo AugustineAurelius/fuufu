@@ -9,7 +9,7 @@ import (
 )
 
 // CreateTask inserts a new Task into the database.
-func (r *Repository) Create(ctx context.Context, task *Task) error {
+func (r *CommandRepository) Create(ctx context.Context, task *Task) error {
 	model := Converter(*task)
 	query, args := sq.Insert(TableTask).
 		Columns(ColumnTaskID, ColumnTaskName, ColumnTaskDescription, ColumnTaskCreatedBy, ColumnTaskDoer, ColumnTaskDone, ColumnTaskRepeatable, ColumnTaskRepeatAfter, ColumnTaskDoBefore, ColumnTaskCreatedAt, ColumnTaskUpdatedAt).

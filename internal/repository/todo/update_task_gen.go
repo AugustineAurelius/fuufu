@@ -6,31 +6,22 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/google/uuid"
 )
 
 // UpdateTask updates an existing Task in the database.
-func (r *Repository) Update(ctx context.Context, id uuid.UUID, u Update) error {
-	b := sq.Update(TableTask).PlaceholderFormat(sq.Question).Where(sq.Eq{ColumnTaskID: id})
+func (r *CommandRepository) Update(ctx context.Context, u Update, opts ...FilterOpt) error {
+	b := sq.Update(TableTask).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+
 	b = ApplySet(b, u)
 	query, args := b.MustSql()
 	if _, err := r.db.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("failed to exec update query %s with args %v", query, args)
-	}
-	return nil
-}
-
-// UpdateTask updates an existing Task in the database.
-func (r *Repository) UpdateMany(ctx context.Context, f Filter, u Update) error {
-	b := sq.Update(TableTask).PlaceholderFormat(sq.Question)
-
-	b = ApplyWhere(b, f)
-
-	b = ApplySet(b, u)
-
-	query, args := b.MustSql()
-	if _, err := r.db.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("failed to exec update query %s with args %v error = %w", query, args, err)
 	}
 	return nil
 }

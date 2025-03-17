@@ -34,7 +34,7 @@ type Cursor struct {
 	closed    bool
 }
 
-func (r *Repository) NewCursor(ctx context.Context, f Filter, params BuilderParams) *Cursor {
+func (r *CommandRepository) NewCursor(ctx context.Context, params BuilderParams, opts ...FilterOpt) *Cursor {
 	limit := 10
 	if params.Limit != nil {
 		limit = *params.Limit
@@ -59,7 +59,56 @@ func (r *Repository) NewCursor(ctx context.Context, f Filter, params BuilderPara
 		ColumnTaskUpdatedAt,
 	).From(TableTask).PlaceholderFormat(sq.Question)
 
-	b = ApplyWhere(b, f)
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
+
+	return &Cursor{
+		pool:      r.db,
+		builder:   b,
+		rows:      make([]TaskModel, 0, limit),
+		index:     -1,
+		offset:    offset,
+		limit:     limit,
+		params:    params,
+		ctx:       ctx,
+		totalRows: 0,
+		closed:    false,
+	}
+}
+
+func (r *QueryRepository) NewCursor(ctx context.Context, params BuilderParams, opts ...FilterOpt) *Cursor {
+	limit := 10
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+
+	offset := 0
+	if params.Offset != nil {
+		offset = *params.Offset
+	}
+
+	b := sq.Select(
+		ColumnTaskID,
+		ColumnTaskName,
+		ColumnTaskDescription,
+		ColumnTaskCreatedBy,
+		ColumnTaskDoer,
+		ColumnTaskDone,
+		ColumnTaskRepeatable,
+		ColumnTaskRepeatAfter,
+		ColumnTaskDoBefore,
+		ColumnTaskCreatedAt,
+		ColumnTaskUpdatedAt,
+	).From(TableTask).PlaceholderFormat(sq.Question)
+
+	f := &Filter{}
+	for i := 0; i < len(opts); i++ {
+		opts[i](f)
+	}
+	b = ApplyWhere(b, *f)
 
 	return &Cursor{
 		pool:      r.db,

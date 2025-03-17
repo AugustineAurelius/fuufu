@@ -33,6 +33,10 @@ air:
 air-serve:
 	air -c .air.toml -build.bin=tmp\\main.exe serve -c=internal/config/config.yaml
 	
+serve:
+	go run . serve
+migrate:
+	go run . migrate
 
 release:
 	goreleaser release

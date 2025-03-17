@@ -11,7 +11,7 @@ import (
 
 type Analytic struct {
 	Meter    metric.Meter
-	TodoRepo *todo_repository.Repository
+	TodoRepo *todo_repository.QueryRepository
 }
 
 func (a *Analytic) Run(ctx context.Context) error {
@@ -35,10 +35,7 @@ func (a *Analytic) Run(ctx context.Context) error {
 }
 
 func (a Analytic) getAllTodoCount(ctx context.Context) (int64, error) {
-	tasks, err := a.TodoRepo.GetMany(ctx, todo_repository.NewFilter(
-		todo_repository.WithDone(false),
-	))
-
+	tasks, err := a.TodoRepo.GetMany(ctx, todo_repository.WithDone(false))
 	if err != nil {
 		return 0, err
 	}
