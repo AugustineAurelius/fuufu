@@ -20,6 +20,6 @@ func TestWithJson(t *testing.T) {
 	log := logger.New()
 	log.Info("test log")
 
-	log2 := logger.New(logger.WithJson())
+	log2 := logger.New(logger.WithJSON())
 	log2.Info("test log json")
 }

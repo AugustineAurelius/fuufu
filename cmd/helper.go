@@ -25,8 +25,8 @@ func getLogger(manager *config.Manager) *zap.Logger {
 	if logCfg.Debug {
 		logOpts = append(logOpts, logger.WithDebug())
 	}
-	if logCfg.Json {
-		logOpts = append(logOpts, logger.WithJson())
+	if logCfg.JSON {
+		logOpts = append(logOpts, logger.WithJSON())
 	}
 
 	return logger.New(logOpts...)
@@ -41,7 +41,10 @@ func initCollector(manager *config.Manager) (*grpc.ClientConn, error) {
 	return conn, err
 }
 
-func initTracerProvider(ctx context.Context, res *resource.Resource, conn *grpc.ClientConn) (func(context.Context) error, error) {
+func initTracerProvider(
+	ctx context.Context,
+	res *resource.Resource,
+	conn *grpc.ClientConn) (func(context.Context) error, error) {
 	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
@@ -59,7 +62,10 @@ func initTracerProvider(ctx context.Context, res *resource.Resource, conn *grpc.
 	return tracerProvider.Shutdown, nil
 }
 
-func initMeterProvider(ctx context.Context, res *resource.Resource, conn *grpc.ClientConn) (func(context.Context) error, error) {
+func initMeterProvider(
+	ctx context.Context,
+	res *resource.Resource,
+	conn *grpc.ClientConn) (func(context.Context) error, error) {
 	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metrics exporter: %w", err)

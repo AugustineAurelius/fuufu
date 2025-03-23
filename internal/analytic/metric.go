@@ -15,21 +15,21 @@ type Analytic struct {
 }
 
 func (a *Analytic) Run(ctx context.Context) error {
-
 	allTodoTasks, err := a.Meter.Int64Gauge("current_todo_tasks")
 	if err != nil {
 		return err
 	}
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
+
+	var tasks int64
 	for range t.C {
-		tasks, err := a.getAllTodoCount(ctx)
+		tasks, err = a.getAllTodoCount(ctx)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
 		allTodoTasks.Record(ctx, tasks)
-
 	}
 	return nil
 }

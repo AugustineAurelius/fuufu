@@ -8,14 +8,23 @@ install:
 	go install github.com/goreleaser/goreleaser/v2@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 
+serve:
+	go run . serve
+	
+migrate:
+	go run . migrate
+
 build-frontend:
 	yarn  --cwd ./frontend run build
 
-build: build-frontend
-	go build  -o bin/
 
-run:
+build: build-frontend
+	go build -o bin/
+
+
+run: build
 	./bin/fuufu.exe serve
+
 generate:
 	go generate ./...
 	make import
@@ -33,11 +42,6 @@ air:
 air-serve:
 	air -c .air.toml -build.bin=tmp\\main.exe serve -c=internal/config/config.yaml
 	
-serve:
-	go run . serve
-migrate:
-	go run . migrate
-
 release:
 	goreleaser release
 

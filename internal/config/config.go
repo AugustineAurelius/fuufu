@@ -5,4 +5,6 @@ type Fuufu struct {
 	PostgresSlave   Postgres
 	LoggerConfig    Logger
 	CollectorConfig Collector
+	MinioConfig     Minio
+	ShieldConfig    Shield
 }

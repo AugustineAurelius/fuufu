@@ -19,7 +19,7 @@ type TodoHandler struct {
 
 // Get Todo list
 // (GET /api/v1/todo)
-func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosRequestObject) (todo.GetAllTodosResponseObject, error) {
+func (h *TodoHandler) GetAllTodos(ctx context.Context, _ todo.GetAllTodosRequestObject) (todo.GetAllTodosResponseObject, error) {
 	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.GetAllTodos")
 	defer span.End()
 
@@ -32,7 +32,6 @@ func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosR
 
 	result := make([]todo.Task, 0, len(todos))
 	for _, task := range todos {
-
 		result = append(result, todo.Task{
 			CreatedBy:   todo.WeAll(task.CreatedBy),
 			Description: task.Description,
@@ -44,7 +43,6 @@ func (h *TodoHandler) GetAllTodos(ctx context.Context, request todo.GetAllTodosR
 			Range:       task.RepeatAfter,
 			Repeatable:  task.Repeatable,
 		})
-
 	}
 
 	return todo.GetAllTodos200JSONResponse{Tasks: result}, nil

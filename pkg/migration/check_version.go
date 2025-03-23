@@ -45,7 +45,7 @@ func CheckMigrations(ctx context.Context, postgresConfig DNSer) error {
 	}
 
 	if version != current {
-		return errors.New("Not all migrations applied should run fuufu migrate")
+		return errors.New("not all migrations applied should run fuufu migrate")
 	}
 
 	return nil

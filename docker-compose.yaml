@@ -46,7 +46,19 @@ services:
       - POSTGRESQL_REPLICATION_USER=repl_user
       - POSTGRESQL_REPLICATION_PASSWORD=repl_password
       - POSTGRESQL_MASTER_PORT_NUMBER=5432
-      
+
+  minio:
+    image: minio/minio
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:9000/minio/health/live"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001" 
+    volumes:
+      - minio_data:/data
+
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.1
     command: ["--config=/etc/otel-collector.yaml"]
@@ -86,3 +98,4 @@ volumes:
   postgresql_slave_data: 
     driver: local
   grafana_data:
+  minio_data:

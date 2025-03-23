@@ -7,6 +7,7 @@ import (
 	"github.com/AugustineAurelius/fuufu/api/auth"
 	"github.com/AugustineAurelius/fuufu/api/todo"
 	"github.com/AugustineAurelius/fuufu/frontend"
+	"github.com/AugustineAurelius/fuufu/internal/analytic"
 	"github.com/AugustineAurelius/fuufu/internal/config"
 	todo_repository "github.com/AugustineAurelius/fuufu/internal/repository/todo"
 	user_repository "github.com/AugustineAurelius/fuufu/internal/repository/user"
@@ -113,18 +114,20 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			todoRepository := todo_repository.NewCommand(&pgMaster)
 			userRepository := user_repository.NewCommand(&pgMaster)
 
-			// analitic := analytic.Analytic{
-			// 	Meter:    meter,
-			// 	TodoRepo: todoRepository,
-			// }
+			todoQuery := todo_repository.NewQuery(&pgSlave)
 
-			// go func() {
-			// 	err = analitic.Run(cmd.Context())
-			// 	if err != nil {
-			// 		log.Error(err.Error())
-			// 		return
-			// 	}
-			// }()
+			analitic := analytic.Analytic{
+				Meter:    meter,
+				TodoRepo: todoQuery,
+			}
+
+			go func() {
+				err = analitic.Run(cmd.Context())
+				if err != nil {
+					log.Error(err.Error())
+					return
+				}
+			}()
 
 			todoHandlers := todo.NewStrictHandler(&server.TodoHandler{
 				Repo:      todoRepository,
@@ -134,19 +137,19 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			authHadnlers := auth.NewStrictHandler(&server.AuthHandler{
 				Repo:      userRepository,
 				Telemetry: tracer,
-				Secret:    "superSecret",
+				Shield:    manager.LoadShield(),
 			}, nil)
 
 			r := http.NewServeMux()
 			h := todo.HandlerFromMux(todoHandlers, r)
-			h = middleware.AuthMiddleware("superSecret", h)
+			middleware.AuthMiddleware(manager.LoadShield(), h)
 			r.Handle("/metrics", promhttp.Handler())
-			h = auth.HandlerFromMux(authHadnlers, r)
+			auth.HandlerFromMux(authHadnlers, r)
 
 			frontend.RegisterFrontend(r)
-			h = middleware.LoggingMiddleware(log, h)
-			h = middleware.MetricMiddleware(meter, h)
-			h = middleware.TracingMiddleware(tracer, h)
+			middleware.LoggingMiddleware(log, h)
+			middleware.MetricMiddleware(meter, h)
+			middleware.TracingMiddleware(tracer, h)
 
 			s := &http.Server{
 				Handler: h,

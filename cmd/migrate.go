@@ -34,11 +34,11 @@ func createMigrateCMD(manager *config.Manager) *cobra.Command {
 			goose.SetDialect("postgres")
 			switch gooseCMD {
 			case "up":
-				if err := goose.UpContext(cmd.Context(), db, "."); err != nil {
+				if err = goose.UpContext(cmd.Context(), db, "."); err != nil {
 					log.Panic(err.Error())
 				}
 			case "down":
-				if err := goose.DownContext(cmd.Context(), db, "."); err != nil {
+				if err = goose.DownContext(cmd.Context(), db, "."); err != nil {
 					log.Panic(err.Error())
 				}
 			}

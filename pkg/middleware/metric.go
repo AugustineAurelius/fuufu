@@ -69,15 +69,15 @@ func MetricMiddleware(meter metric.Meter, next http.Handler) http.Handler {
 
 		next.ServeHTTP(rw, r)
 
-		labels := append(baseLabels,
+		baseLabels = append(baseLabels,
 			attribute.Int("http.status_code", rw.statusCode),
 		)
 
-		requestCount.Add(ctx, 1, metric.WithAttributes(labels...))
+		requestCount.Add(ctx, 1, metric.WithAttributes(baseLabels...))
 
 		duration := time.Since(startTime).Milliseconds()
-		durationHistogram.Record(ctx, duration, metric.WithAttributes(labels...))
+		durationHistogram.Record(ctx, duration, metric.WithAttributes(baseLabels...))
 
-		responseSizeHistogram.Record(ctx, int64(rw.size), metric.WithAttributes(labels...))
+		responseSizeHistogram.Record(ctx, int64(rw.size), metric.WithAttributes(baseLabels...))
 	})
 }

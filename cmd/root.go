@@ -66,7 +66,7 @@ func printWelcome() {
 		{"U", color.New(color.FgHiWhite)},
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		for _, p := range pattern {
 			switch p.char {
 			case "F":

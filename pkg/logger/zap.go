@@ -13,7 +13,7 @@ func WithDebug() LoggerOpt {
 	}
 }
 
-func WithJson() LoggerOpt {
+func WithJSON() LoggerOpt {
 	return func(config *zap.Config) {
 		config.Encoding = "json"
 	}

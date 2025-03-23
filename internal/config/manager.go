@@ -34,16 +34,18 @@ func (man Manager) addConfigs() {
 
 		parts := strings.Split(defaultAddr, ":")
 		host = parts[0]
-		p, _ := strconv.Atoi(parts[1]) //nolint:errcheck
+		p, _ := strconv.Atoi(parts[1])
 		port = p
 
 		man.addConfigString(prefix+".host", host, "PostgreSQL server host"+usageSuffix)
 		man.addConfigInt(prefix+".port", port, "PostgreSQL server port"+usageSuffix)
 		man.addConfigString(prefix+".username", "postgres", "PostgreSQL server username"+usageSuffix)
-		man.addConfigString(prefix+".password", "postgres", "PostgreSQL server password (prefer env variable for security)"+usageSuffix)
+		man.addConfigString(prefix+".password", "postgres",
+			"PostgreSQL server password (prefer env variable for security)"+usageSuffix)
 		man.addConfigString(prefix+".password_path", "", "Path to file containing PostgreSQL server password"+usageSuffix)
 		man.addConfigString(prefix+".database", "postgres", "PostgreSQL database name"+usageSuffix)
-		man.addConfigString(prefix+".ssl_mode", "disable", "PostgreSQL SSL mode (disable|allow|prefer|require|verify-ca|verify-full)"+usageSuffix)
+		man.addConfigString(prefix+".ssl_mode", "disable",
+			"PostgreSQL SSL mode (disable|allow|prefer|require|verify-ca|verify-full)"+usageSuffix)
 		man.addConfigString(prefix+".ssl_cert", "", "Path to PostgreSQL SSL client certificate"+usageSuffix)
 		man.addConfigString(prefix+".ssl_key", "", "Path to PostgreSQL SSL client key"+usageSuffix)
 		man.addConfigString(prefix+".ssl_root_cert", "", "Path to PostgreSQL root CA certificate"+usageSuffix)
@@ -61,6 +63,13 @@ func (man Manager) addConfigs() {
 
 	man.addConfigString("collector.host", "localhost", "Host for otel collector")
 	man.addConfigInt("collector.port", 4317, "Port for otel collector")
+
+	man.addConfigString("minio.endpoint", "minio:9000", "Address for minio deploy")
+	man.addConfigString("minio.access_key_id", "minioadmin", "like MINIO_ROOT_USER")
+	man.addConfigString("minio.secret_access_key", "minioadmin", "like MINIO_ROOT_PASSWORD")
+	man.addConfigString("minio.token", "", "Check minio connection options")
+
+	man.addConfigString("shield.secret", "super_secret", "JWT secret")
 }
 
 func (man Manager) LoadConfig() Fuufu {
@@ -89,11 +98,20 @@ func (man Manager) LoadConfig() Fuufu {
 		PostgresSlave:  loadPgxPoolConfig("postgres.slave"),
 		LoggerConfig: Logger{
 			Debug: man.getConfigBool("logging.debug"),
-			Json:  man.getConfigBool("logging.json"),
+			JSON:  man.getConfigBool("logging.json"),
 		},
 		CollectorConfig: Collector{
 			Host: man.getConfigString("collector.host"),
 			Port: man.getConfigInt("collector.port"),
+		},
+		MinioConfig: Minio{
+			Endpoint:        man.getConfigString("minio.endpoint"),
+			AccessKeyID:     man.getConfigString("minio.access_key_id"),
+			SecretAccessKey: man.getConfigString("minio.secret_access_key"),
+			Token:           man.getConfigString("minio.token"),
+		},
+		ShieldConfig: Shield{
+			Secret: man.getConfigString("shield.secret"),
 		},
 	}
 	return cfg

@@ -8,7 +8,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware(secret string, next http.Handler) http.Handler {
+type Shield interface {
+	GetSecret() string
+}
+
+func AuthMiddleware(shield Shield, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -21,7 +25,7 @@ func AuthMiddleware(secret string, next http.Handler) http.Handler {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte(secret), nil
+			return []byte(shield.GetSecret()), nil
 		})
 
 		if err != nil || !token.Valid {

@@ -13,18 +13,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type Shield interface {
+	GetSecret() string
+}
+
 type AuthHandler struct {
 	auth.StrictServerInterface
 
 	Repo      *user_repository.CommandRepository
 	Telemetry trace.Tracer
 
-	Secret string
+	Shield Shield
 }
 
 // Example protected endpoint
 // (GET /protected)
-func (h *AuthHandler) GetProtected(ctx context.Context, request auth.GetProtectedRequestObject) (auth.GetProtectedResponseObject, error) {
+func (h *AuthHandler) GetProtected(_ context.Context, request auth.GetProtectedRequestObject) (auth.GetProtectedResponseObject, error) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -45,7 +49,7 @@ func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.Post
 		}, nil
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(request.Body.Password)); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(request.Body.Password)); err != nil {
 		return auth.PostApiV1AuthSignin500JSONResponse{
 			Error: err.Error(),
 		}, nil
@@ -57,7 +61,7 @@ func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.Post
 		"exp":      expireTime.Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(h.Secret))
+	tokenString, err := token.SignedString([]byte(h.Shield.GetSecret()))
 	if err != nil {
 		return auth.PostApiV1AuthSignin500JSONResponse{
 			Error: err.Error(),
