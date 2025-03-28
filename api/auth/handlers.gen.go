@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -25,8 +26,8 @@ import (
 
 // AuthToken defines model for AuthToken.
 type AuthToken struct {
-	Expires *time.Time `json:"expires,omitempty"`
-	Token   *string    `json:"token,omitempty"`
+	Expires time.Time `json:"expires"`
+	Token   string    `json:"token"`
 }
 
 // Error defines model for Error.
@@ -59,6 +60,564 @@ type PostApiV1AuthSigninJSONRequestBody PostApiV1AuthSigninJSONBody
 
 // PostApiV1AuthSignupJSONRequestBody defines body for PostApiV1AuthSignup for application/json ContentType.
 type PostApiV1AuthSignupJSONRequestBody PostApiV1AuthSignupJSONBody
+
+// RequestEditorFn  is the function signature for the RequestEditor callback function
+type RequestEditorFn func(ctx context.Context, req *http.Request) error
+
+// Doer performs HTTP requests.
+//
+// The standard http.Client implements this interface.
+type HttpRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Client which conforms to the OpenAPI3 specification for this service.
+type Client struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	// Doer for performing requests, typically a *http.Client with any
+	// customized settings, such as certificate chains.
+	Client HttpRequestDoer
+
+	// A list of callbacks for modifying requests which are generated before sending over
+	// the network.
+	RequestEditors []RequestEditorFn
+}
+
+// ClientOption allows setting custom parameters during construction
+type ClientOption func(*Client) error
+
+// Creates a new Client, with reasonable defaults
+func NewClient(server string, opts ...ClientOption) (*Client, error) {
+	// create a client with sane default values
+	client := Client{
+		Server: server,
+	}
+	// mutate client and add all optional params
+	for _, o := range opts {
+		if err := o(&client); err != nil {
+			return nil, err
+		}
+	}
+	// ensure the server URL always has a trailing slash
+	if !strings.HasSuffix(client.Server, "/") {
+		client.Server += "/"
+	}
+	// create httpClient, if not already present
+	if client.Client == nil {
+		client.Client = &http.Client{}
+	}
+	return &client, nil
+}
+
+// WithHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+func WithHTTPClient(doer HttpRequestDoer) ClientOption {
+	return func(c *Client) error {
+		c.Client = doer
+		return nil
+	}
+}
+
+// WithRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
+	return func(c *Client) error {
+		c.RequestEditors = append(c.RequestEditors, fn)
+		return nil
+	}
+}
+
+// The interface specification for the client above.
+type ClientInterface interface {
+	// PostApiV1AuthSigninWithBody request with any body
+	PostApiV1AuthSigninWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostApiV1AuthSignin(ctx context.Context, body PostApiV1AuthSigninJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostApiV1AuthSignupWithBody request with any body
+	PostApiV1AuthSignupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostApiV1AuthSignup(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProtected request
+	GetProtected(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) PostApiV1AuthSigninWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1AuthSigninRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1AuthSignin(ctx context.Context, body PostApiV1AuthSigninJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1AuthSigninRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1AuthSignupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1AuthSignupRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostApiV1AuthSignup(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostApiV1AuthSignupRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetProtected(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProtectedRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewPostApiV1AuthSigninRequest calls the generic PostApiV1AuthSignin builder with application/json body
+func NewPostApiV1AuthSigninRequest(server string, body PostApiV1AuthSigninJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiV1AuthSigninRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiV1AuthSigninRequestWithBody generates requests for PostApiV1AuthSignin with any type of body
+func NewPostApiV1AuthSigninRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/signin")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostApiV1AuthSignupRequest calls the generic PostApiV1AuthSignup builder with application/json body
+func NewPostApiV1AuthSignupRequest(server string, body PostApiV1AuthSignupJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostApiV1AuthSignupRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostApiV1AuthSignupRequestWithBody generates requests for PostApiV1AuthSignup with any type of body
+func NewPostApiV1AuthSignupRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/signup")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetProtectedRequest generates requests for GetProtected
+func NewGetProtectedRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/protected")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
+	for _, r := range c.RequestEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	for _, r := range additionalEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ClientWithResponses builds on ClientInterface to offer response payloads
+type ClientWithResponses struct {
+	ClientInterface
+}
+
+// NewClientWithResponses creates a new ClientWithResponses, which wraps
+// Client with return type handling
+func NewClientWithResponses(server string, opts ...ClientOption) (*ClientWithResponses, error) {
+	client, err := NewClient(server, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &ClientWithResponses{client}, nil
+}
+
+// WithBaseURL overrides the baseURL.
+func WithBaseURL(baseURL string) ClientOption {
+	return func(c *Client) error {
+		newBaseURL, err := url.Parse(baseURL)
+		if err != nil {
+			return err
+		}
+		c.Server = newBaseURL.String()
+		return nil
+	}
+}
+
+// ClientWithResponsesInterface is the interface specification for the client with responses above.
+type ClientWithResponsesInterface interface {
+	// PostApiV1AuthSigninWithBodyWithResponse request with any body
+	PostApiV1AuthSigninWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSigninResponse, error)
+
+	PostApiV1AuthSigninWithResponse(ctx context.Context, body PostApiV1AuthSigninJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthSigninResponse, error)
+
+	// PostApiV1AuthSignupWithBodyWithResponse request with any body
+	PostApiV1AuthSignupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error)
+
+	PostApiV1AuthSignupWithResponse(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error)
+
+	// GetProtectedWithResponse request
+	GetProtectedWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetProtectedResponse, error)
+}
+
+type PostApiV1AuthSigninResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AuthToken
+	JSON401      *Error
+	JSON500      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1AuthSigninResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1AuthSigninResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostApiV1AuthSignupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *User
+	JSON400      *Error
+	JSON409      *Error
+	JSON500      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r PostApiV1AuthSignupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostApiV1AuthSignupResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetProtectedResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Message *string `json:"message,omitempty"`
+	}
+	JSON401 *Error
+	JSON403 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProtectedResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProtectedResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// PostApiV1AuthSigninWithBodyWithResponse request with arbitrary body returning *PostApiV1AuthSigninResponse
+func (c *ClientWithResponses) PostApiV1AuthSigninWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSigninResponse, error) {
+	rsp, err := c.PostApiV1AuthSigninWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1AuthSigninResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostApiV1AuthSigninWithResponse(ctx context.Context, body PostApiV1AuthSigninJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthSigninResponse, error) {
+	rsp, err := c.PostApiV1AuthSignin(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1AuthSigninResponse(rsp)
+}
+
+// PostApiV1AuthSignupWithBodyWithResponse request with arbitrary body returning *PostApiV1AuthSignupResponse
+func (c *ClientWithResponses) PostApiV1AuthSignupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error) {
+	rsp, err := c.PostApiV1AuthSignupWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1AuthSignupResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostApiV1AuthSignupWithResponse(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error) {
+	rsp, err := c.PostApiV1AuthSignup(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostApiV1AuthSignupResponse(rsp)
+}
+
+// GetProtectedWithResponse request returning *GetProtectedResponse
+func (c *ClientWithResponses) GetProtectedWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetProtectedResponse, error) {
+	rsp, err := c.GetProtected(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProtectedResponse(rsp)
+}
+
+// ParsePostApiV1AuthSigninResponse parses an HTTP response from a PostApiV1AuthSigninWithResponse call
+func ParsePostApiV1AuthSigninResponse(rsp *http.Response) (*PostApiV1AuthSigninResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1AuthSigninResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuthToken
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostApiV1AuthSignupResponse parses an HTTP response from a PostApiV1AuthSignupWithResponse call
+func ParsePostApiV1AuthSignupResponse(rsp *http.Response) (*PostApiV1AuthSignupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostApiV1AuthSignupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest User
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetProtectedResponse parses an HTTP response from a GetProtectedWithResponse call
+func ParseGetProtectedResponse(rsp *http.Response) (*GetProtectedResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProtectedResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Message *string `json:"message,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -497,20 +1056,20 @@ func (sh *strictHandler) GetProtected(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

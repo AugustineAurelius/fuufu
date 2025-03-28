@@ -69,8 +69,8 @@ func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.Post
 	}
 
 	return auth.PostApiV1AuthSignin200JSONResponse{
-		Expires: &expireTime,
-		Token:   &tokenString,
+		Expires: expireTime,
+		Token:   tokenString,
 	}, nil
 }
 
@@ -85,6 +85,12 @@ func (h *AuthHandler) PostApiV1AuthSignup(ctx context.Context, request auth.Post
 
 	id := uuid.New()
 	created := time.Now().UTC()
+
+	if _, err := h.Repo.Get(ctx, user_repository.WithEmail(string(request.Body.Email)), user_repository.WithName(request.Body.Username)); err == nil {
+		return auth.PostApiV1AuthSignup409JSONResponse{
+			Error: "already exists",
+		}, nil
+	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(request.Body.Password), 10)
 	if err != nil {

@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"github.com/AugustineAurelius/fuufu/internal/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -17,6 +18,18 @@ func WithJSON() LoggerOpt {
 	return func(config *zap.Config) {
 		config.Encoding = "json"
 	}
+}
+func NewWithManager(manager *config.Manager) *zap.Logger {
+	logOpts := make([]LoggerOpt, 0, 8)
+	logCfg := manager.LoadLogging()
+	if logCfg.Debug {
+		logOpts = append(logOpts, WithDebug())
+	}
+	if logCfg.JSON {
+		logOpts = append(logOpts, WithJSON())
+	}
+
+	return New(logOpts...)
 }
 
 func New(opts ...LoggerOpt) *zap.Logger {

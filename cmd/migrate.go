@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/AugustineAurelius/fuufu/internal/config"
+	"github.com/AugustineAurelius/fuufu/pkg/logger"
 	"github.com/pressly/goose/v3"
 	"github.com/spf13/cobra"
 
@@ -16,7 +17,7 @@ func createMigrateCMD(manager *config.Manager) *cobra.Command {
 	migrateCMD := &cobra.Command{
 		Use: "migrate",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log := getLogger(manager)
+			log := logger.NewWithManager(manager)
 
 			postgresMasterConfig := manager.LoadPostgres()
 			log.Sugar().Infof("get postgres connection url: %s", postgresMasterConfig.DNS())

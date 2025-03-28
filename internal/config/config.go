@@ -7,4 +7,5 @@ type Fuufu struct {
 	CollectorConfig Collector
 	MinioConfig     Minio
 	ShieldConfig    Shield
+	SeverConfig     Server
 }

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"net"
 	"net/http"
 
 	"github.com/AugustineAurelius/fuufu/api/auth"
@@ -9,10 +8,14 @@ import (
 	"github.com/AugustineAurelius/fuufu/frontend"
 	"github.com/AugustineAurelius/fuufu/internal/analytic"
 	"github.com/AugustineAurelius/fuufu/internal/config"
+	event_repository "github.com/AugustineAurelius/fuufu/internal/repository/event"
 	todo_repository "github.com/AugustineAurelius/fuufu/internal/repository/todo"
 	user_repository "github.com/AugustineAurelius/fuufu/internal/repository/user"
+
 	"github.com/AugustineAurelius/fuufu/internal/server"
 	"github.com/AugustineAurelius/fuufu/pkg/common"
+	"github.com/AugustineAurelius/fuufu/pkg/geo"
+	"github.com/AugustineAurelius/fuufu/pkg/logger"
 	"github.com/AugustineAurelius/fuufu/pkg/middleware"
 	"github.com/AugustineAurelius/fuufu/pkg/migration"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -33,7 +36,7 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 	serveCMD := &cobra.Command{
 		Use: "serve",
 		Run: func(cmd *cobra.Command, args []string) {
-			log := getLogger(manager)
+			log := logger.NewWithManager(manager)
 
 			if err := migration.CheckMigrations(cmd.Context(), manager.LoadPostgres()); err != nil {
 				log.Error(err.Error())
@@ -113,6 +116,7 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 
 			todoRepository := todo_repository.NewCommand(&pgMaster)
 			userRepository := user_repository.NewCommand(&pgMaster)
+			eventRepository := event_repository.NewCommand(&pgMaster)
 
 			todoQuery := todo_repository.NewQuery(&pgSlave)
 
@@ -141,19 +145,22 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			}, nil)
 
 			r := http.NewServeMux()
-			h := todo.HandlerFromMux(todoHandlers, r)
-			middleware.AuthMiddleware(manager.LoadShield(), h)
+
 			r.Handle("/metrics", promhttp.Handler())
-			auth.HandlerFromMux(authHadnlers, r)
+			h := todo.HandlerFromMux(todoHandlers, r)
+			h = middleware.AuthMiddleware(manager.LoadShield(), h)
+
+			h = auth.HandlerFromMux(authHadnlers, r)
 
 			frontend.RegisterFrontend(r)
-			middleware.LoggingMiddleware(log, h)
-			middleware.MetricMiddleware(meter, h)
-			middleware.TracingMiddleware(tracer, h)
 
+			h = middleware.LoggingMiddleware(log, h)
+			h = middleware.MetricMiddleware(meter, h)
+			h = middleware.TracingMiddleware(tracer, h)
+			h = middleware.AuditMiddleware(geo.NewGeoIPService(), eventRepository, h, "/metrics")
 			s := &http.Server{
 				Handler: h,
-				Addr:    net.JoinHostPort("0.0.0.0", "7070"),
+				Addr:    manager.LoadServer().Addr,
 			}
 
 			panic(s.ListenAndServe())

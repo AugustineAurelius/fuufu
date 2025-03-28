@@ -70,6 +70,7 @@ func (man Manager) addConfigs() {
 	man.addConfigString("minio.token", "", "Check minio connection options")
 
 	man.addConfigString("shield.secret", "super_secret", "JWT secret")
+	man.addConfigString("server.address", "0.0.0.0:7070", "default server address")
 }
 
 func (man Manager) LoadConfig() Fuufu {
@@ -112,6 +113,9 @@ func (man Manager) LoadConfig() Fuufu {
 		},
 		ShieldConfig: Shield{
 			Secret: man.getConfigString("shield.secret"),
+		},
+		SeverConfig: Server{
+			Addr: man.getConfigString("server.address"),
 		},
 	}
 	return cfg
