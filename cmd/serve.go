@@ -145,14 +145,11 @@ func createServeCMD(manager *config.Manager) *cobra.Command {
 			}, nil)
 
 			r := http.NewServeMux()
-
 			r.Handle("/metrics", promhttp.Handler())
-			h := todo.HandlerFromMux(todoHandlers, r)
-			h = middleware.AuthMiddleware(manager.LoadShield(), h)
-
-			h = auth.HandlerFromMux(authHadnlers, r)
-
+			auth.HandlerFromMux(authHadnlers, r)
 			frontend.RegisterFrontend(r)
+			h := todo.HandlerFromMux(todoHandlers, r)
+			h = middleware.AuthMiddleware(manager.LoadShield(), h, "/metrics", "/api/v1/auth/signup", "/api/v1/auth/signin")
 
 			h = middleware.LoggingMiddleware(log, h)
 			h = middleware.MetricMiddleware(meter, h)

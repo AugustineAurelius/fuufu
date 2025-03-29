@@ -26,12 +26,6 @@ type AuthHandler struct {
 	Shield Shield
 }
 
-// Example protected endpoint
-// (GET /protected)
-func (h *AuthHandler) GetProtected(_ context.Context, request auth.GetProtectedRequestObject) (auth.GetProtectedResponseObject, error) {
-	panic("not implemented") // TODO: Implement
-}
-
 // Authenticate user
 // (POST api/v1/auth/signin)
 func (h *AuthHandler) PostApiV1AuthSignin(ctx context.Context, request auth.PostApiV1AuthSigninRequestObject) (auth.PostApiV1AuthSigninResponseObject, error) {

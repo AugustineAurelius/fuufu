@@ -143,9 +143,6 @@ type ClientInterface interface {
 	PostApiV1AuthSignupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PostApiV1AuthSignup(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetProtected request
-	GetProtected(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) PostApiV1AuthSigninWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -186,18 +183,6 @@ func (c *Client) PostApiV1AuthSignupWithBody(ctx context.Context, contentType st
 
 func (c *Client) PostApiV1AuthSignup(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostApiV1AuthSignupRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetProtected(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetProtectedRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -288,33 +273,6 @@ func NewPostApiV1AuthSignupRequestWithBody(server string, contentType string, bo
 	return req, nil
 }
 
-// NewGetProtectedRequest generates requests for GetProtected
-func NewGetProtectedRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/protected")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -367,9 +325,6 @@ type ClientWithResponsesInterface interface {
 	PostApiV1AuthSignupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error)
 
 	PostApiV1AuthSignupWithResponse(ctx context.Context, body PostApiV1AuthSignupJSONRequestBody, reqEditors ...RequestEditorFn) (*PostApiV1AuthSignupResponse, error)
-
-	// GetProtectedWithResponse request
-	GetProtectedWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetProtectedResponse, error)
 }
 
 type PostApiV1AuthSigninResponse struct {
@@ -421,32 +376,6 @@ func (r PostApiV1AuthSignupResponse) StatusCode() int {
 	return 0
 }
 
-type GetProtectedResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Message *string `json:"message,omitempty"`
-	}
-	JSON401 *Error
-	JSON403 *Error
-}
-
-// Status returns HTTPResponse.Status
-func (r GetProtectedResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetProtectedResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 // PostApiV1AuthSigninWithBodyWithResponse request with arbitrary body returning *PostApiV1AuthSigninResponse
 func (c *ClientWithResponses) PostApiV1AuthSigninWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostApiV1AuthSigninResponse, error) {
 	rsp, err := c.PostApiV1AuthSigninWithBody(ctx, contentType, body, reqEditors...)
@@ -479,15 +408,6 @@ func (c *ClientWithResponses) PostApiV1AuthSignupWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParsePostApiV1AuthSignupResponse(rsp)
-}
-
-// GetProtectedWithResponse request returning *GetProtectedResponse
-func (c *ClientWithResponses) GetProtectedWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetProtectedResponse, error) {
-	rsp, err := c.GetProtected(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetProtectedResponse(rsp)
 }
 
 // ParsePostApiV1AuthSigninResponse parses an HTTP response from a PostApiV1AuthSigninWithResponse call
@@ -577,48 +497,6 @@ func ParsePostApiV1AuthSignupResponse(rsp *http.Response) (*PostApiV1AuthSignupR
 	return response, nil
 }
 
-// ParseGetProtectedResponse parses an HTTP response from a GetProtectedWithResponse call
-func ParseGetProtectedResponse(rsp *http.Response) (*GetProtectedResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetProtectedResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Message *string `json:"message,omitempty"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Authenticate user
@@ -627,9 +505,6 @@ type ServerInterface interface {
 	// Register new user
 	// (POST /api/v1/auth/signup)
 	PostApiV1AuthSignup(w http.ResponseWriter, r *http.Request)
-	// Example protected endpoint
-	// (GET /protected)
-	GetProtected(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -660,20 +535,6 @@ func (siw *ServerInterfaceWrapper) PostApiV1AuthSignup(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PostApiV1AuthSignup(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProtected operation middleware
-func (siw *ServerInterfaceWrapper) GetProtected(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProtected(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -805,7 +666,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/auth/signin", wrapper.PostApiV1AuthSignin)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/auth/signup", wrapper.PostApiV1AuthSignup)
-	m.HandleFunc("GET "+options.BaseURL+"/protected", wrapper.GetProtected)
 
 	return m
 }
@@ -889,42 +749,6 @@ func (response PostApiV1AuthSignup500JSONResponse) VisitPostApiV1AuthSignupRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetProtectedRequestObject struct {
-}
-
-type GetProtectedResponseObject interface {
-	VisitGetProtectedResponse(w http.ResponseWriter) error
-}
-
-type GetProtected200JSONResponse struct {
-	Message *string `json:"message,omitempty"`
-}
-
-func (response GetProtected200JSONResponse) VisitGetProtectedResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProtected401JSONResponse Error
-
-func (response GetProtected401JSONResponse) VisitGetProtectedResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetProtected403JSONResponse Error
-
-func (response GetProtected403JSONResponse) VisitGetProtectedResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Authenticate user
@@ -933,9 +757,6 @@ type StrictServerInterface interface {
 	// Register new user
 	// (POST /api/v1/auth/signup)
 	PostApiV1AuthSignup(ctx context.Context, request PostApiV1AuthSignupRequestObject) (PostApiV1AuthSignupResponseObject, error)
-	// Example protected endpoint
-	// (GET /protected)
-	GetProtected(ctx context.Context, request GetProtectedRequestObject) (GetProtectedResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -1029,47 +850,22 @@ func (sh *strictHandler) PostApiV1AuthSignup(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// GetProtected operation middleware
-func (sh *strictHandler) GetProtected(w http.ResponseWriter, r *http.Request) {
-	var request GetProtectedRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetProtected(ctx, request.(GetProtectedRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetProtected")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetProtectedResponseObject); ok {
-		if err := validResponse.VisitGetProtectedResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"//8usztbNgoAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

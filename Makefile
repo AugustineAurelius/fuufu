@@ -11,8 +11,8 @@ install:
 serve:
 	go run . serve
 	
-migrate:
-	go run . migrate
+migrate: build
+	./bin/fuufu.exe migrate
 
 build-frontend:
 	yarn  --cwd ./frontend run build
@@ -24,6 +24,11 @@ build: build-frontend
 
 run: build
 	./bin/fuufu.exe serve
+
+test: build
+	./bin/fuufu.exe test auth
+	./bin/fuufu.exe test todo
+
 
 generate:
 	go generate ./...

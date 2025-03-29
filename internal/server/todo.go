@@ -99,6 +99,7 @@ func (h *TodoHandler) GetTaskByID(ctx context.Context, request todo.GetTaskByIDR
 	}
 
 	return todo.GetTaskByID200JSONResponse{
+		Id:          todoOne.ID,
 		CreatedBy:   todo.WeAll(todoOne.CreatedBy),
 		Description: todoOne.Description,
 		DoBefore:    *todoOne.DoBefore,
@@ -107,4 +108,27 @@ func (h *TodoHandler) GetTaskByID(ctx context.Context, request todo.GetTaskByIDR
 		Range:       todoOne.RepeatAfter,
 		Repeatable:  todoOne.Repeatable,
 	}, nil
+}
+
+// delete task by todo_id
+// (DELETE /api/v1/todo/{todo_id})
+func (h *TodoHandler) DeleteTaskByID(ctx context.Context, request todo.DeleteTaskByIDRequestObject) (todo.DeleteTaskByIDResponseObject, error) {
+	ctx, span := h.Telemetry.Start(ctx, "TodoHandler.DeleteByID", trace.WithAttributes(
+		attribute.Stringer("todo_id", request.TodoId),
+	))
+	defer span.End()
+
+	_, err := h.Repo.Get(ctx, todo_repository.WithID(request.TodoId))
+	if err != nil {
+		return todo.DeleteTaskByID404Response{}, nil
+	}
+
+	err = h.Repo.Delete(ctx, todo_repository.WithID(request.TodoId))
+	if err != nil {
+		return todo.DeleteTaskByID500JSONResponse{
+			Error: err.Error(),
+		}, nil
+	}
+
+	return todo.DeleteTaskByID200Response{}, nil
 }

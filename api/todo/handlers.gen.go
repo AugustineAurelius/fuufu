@@ -143,6 +143,9 @@ type ClientInterface interface {
 
 	CreateNewTask(ctx context.Context, body CreateNewTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteTaskByID request
+	DeleteTaskByID(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetTaskByID request
 	GetTaskByID(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -173,6 +176,18 @@ func (c *Client) CreateNewTaskWithBody(ctx context.Context, contentType string, 
 
 func (c *Client) CreateNewTask(ctx context.Context, body CreateNewTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateNewTaskRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteTaskByID(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTaskByIDRequest(c.Server, todoId)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +277,40 @@ func NewCreateNewTaskRequestWithBody(server string, contentType string, body io.
 	return req, nil
 }
 
+// NewDeleteTaskByIDRequest generates requests for DeleteTaskByID
+func NewDeleteTaskByIDRequest(server string, todoId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "todo_id", runtime.ParamLocationPath, todoId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/todo/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetTaskByIDRequest generates requests for GetTaskByID
 func NewGetTaskByIDRequest(server string, todoId openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -347,6 +396,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateNewTaskWithResponse(ctx context.Context, body CreateNewTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNewTaskResponse, error)
 
+	// DeleteTaskByIDWithResponse request
+	DeleteTaskByIDWithResponse(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteTaskByIDResponse, error)
+
 	// GetTaskByIDWithResponse request
 	GetTaskByIDWithResponse(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetTaskByIDResponse, error)
 }
@@ -393,6 +445,28 @@ func (r CreateNewTaskResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateNewTaskResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteTaskByIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTaskByIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTaskByIDResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -446,6 +520,15 @@ func (c *ClientWithResponses) CreateNewTaskWithResponse(ctx context.Context, bod
 		return nil, err
 	}
 	return ParseCreateNewTaskResponse(rsp)
+}
+
+// DeleteTaskByIDWithResponse request returning *DeleteTaskByIDResponse
+func (c *ClientWithResponses) DeleteTaskByIDWithResponse(ctx context.Context, todoId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteTaskByIDResponse, error) {
+	rsp, err := c.DeleteTaskByID(ctx, todoId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTaskByIDResponse(rsp)
 }
 
 // GetTaskByIDWithResponse request returning *GetTaskByIDResponse
@@ -525,6 +608,32 @@ func ParseCreateNewTaskResponse(rsp *http.Response) (*CreateNewTaskResponse, err
 	return response, nil
 }
 
+// ParseDeleteTaskByIDResponse parses an HTTP response from a DeleteTaskByIDWithResponse call
+func ParseDeleteTaskByIDResponse(rsp *http.Response) (*DeleteTaskByIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTaskByIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetTaskByIDResponse parses an HTTP response from a GetTaskByIDWithResponse call
 func ParseGetTaskByIDResponse(rsp *http.Response) (*GetTaskByIDResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -566,6 +675,9 @@ type ServerInterface interface {
 	// Creates a new task
 	// (POST /api/v1/todo)
 	CreateNewTask(w http.ResponseWriter, r *http.Request)
+	// delete task by todo_id
+	// (DELETE /api/v1/todo/{todo_id})
+	DeleteTaskByID(w http.ResponseWriter, r *http.Request, todoId openapi_types.UUID)
 	// Get task by todo_id
 	// (GET /api/v1/todo/{todo_id})
 	GetTaskByID(w http.ResponseWriter, r *http.Request, todoId openapi_types.UUID)
@@ -599,6 +711,31 @@ func (siw *ServerInterfaceWrapper) CreateNewTask(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateNewTask(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTaskByID operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTaskByID(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "todo_id" -------------
+	var todoId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "todo_id", r.PathValue("todo_id"), &todoId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "todo_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTaskByID(w, r, todoId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -755,6 +892,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/todo", wrapper.GetAllTodos)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/todo", wrapper.CreateNewTask)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/todo/{todo_id}", wrapper.DeleteTaskByID)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/todo/{todo_id}", wrapper.GetTaskByID)
 
 	return m
@@ -813,6 +951,39 @@ func (response CreateNewTask500JSONResponse) VisitCreateNewTaskResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type DeleteTaskByIDRequestObject struct {
+	TodoId openapi_types.UUID `json:"todo_id"`
+}
+
+type DeleteTaskByIDResponseObject interface {
+	VisitDeleteTaskByIDResponse(w http.ResponseWriter) error
+}
+
+type DeleteTaskByID200Response struct {
+}
+
+func (response DeleteTaskByID200Response) VisitDeleteTaskByIDResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type DeleteTaskByID404Response struct {
+}
+
+func (response DeleteTaskByID404Response) VisitDeleteTaskByIDResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type DeleteTaskByID500JSONResponse ErrorResponse
+
+func (response DeleteTaskByID500JSONResponse) VisitDeleteTaskByIDResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetTaskByIDRequestObject struct {
 	TodoId openapi_types.UUID `json:"todo_id"`
 }
@@ -855,6 +1026,9 @@ type StrictServerInterface interface {
 	// Creates a new task
 	// (POST /api/v1/todo)
 	CreateNewTask(ctx context.Context, request CreateNewTaskRequestObject) (CreateNewTaskResponseObject, error)
+	// delete task by todo_id
+	// (DELETE /api/v1/todo/{todo_id})
+	DeleteTaskByID(ctx context.Context, request DeleteTaskByIDRequestObject) (DeleteTaskByIDResponseObject, error)
 	// Get task by todo_id
 	// (GET /api/v1/todo/{todo_id})
 	GetTaskByID(ctx context.Context, request GetTaskByIDRequestObject) (GetTaskByIDResponseObject, error)
@@ -944,6 +1118,32 @@ func (sh *strictHandler) CreateNewTask(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// DeleteTaskByID operation middleware
+func (sh *strictHandler) DeleteTaskByID(w http.ResponseWriter, r *http.Request, todoId openapi_types.UUID) {
+	var request DeleteTaskByIDRequestObject
+
+	request.TodoId = todoId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTaskByID(ctx, request.(DeleteTaskByIDRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTaskByID")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTaskByIDResponseObject); ok {
+		if err := validResponse.VisitDeleteTaskByIDResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetTaskByID operation middleware
 func (sh *strictHandler) GetTaskByID(w http.ResponseWriter, r *http.Request, todoId openapi_types.UUID) {
 	var request GetTaskByIDRequestObject
@@ -973,18 +1173,19 @@ func (sh *strictHandler) GetTaskByID(w http.ResponseWriter, r *http.Request, tod
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"uQoAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

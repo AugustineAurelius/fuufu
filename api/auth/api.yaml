@@ -136,32 +136,3 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
-  /protected:
-    get:
-      tags: [Protected]
-      summary: Example protected endpoint
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Authenticated content
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
