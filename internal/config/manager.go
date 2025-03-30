@@ -70,7 +70,11 @@ func (man Manager) addConfigs() {
 	man.addConfigString("minio.token", "", "Check minio connection options")
 
 	man.addConfigString("shield.secret", "super_secret", "JWT secret")
+
 	man.addConfigString("server.address", "0.0.0.0:7070", "default server address")
+	man.addConfigStringArray("server.authentication_exclude", []string{"/metrics", "/api/v1/auth/signup", "/api/v1/auth/signin"}, "paths which should be not authorized")
+	man.addConfigStringArray("server.geolocation_exclude", []string{"/metrics"}, "paths which should be not store events about geolocation")
+
 }
 
 func (man Manager) LoadConfig() Fuufu {
@@ -115,7 +119,9 @@ func (man Manager) LoadConfig() Fuufu {
 			Secret: man.getConfigString("shield.secret"),
 		},
 		SeverConfig: Server{
-			Addr: man.getConfigString("server.address"),
+			Addr:                  man.getConfigString("server.address"),
+			AuthMiddlewareExclude: man.getConfigStringArray("server.authentication_exclude"),
+			GeoMiddlewareExclude:  man.getConfigStringArray("server.geolocation_exclude"),
 		},
 	}
 	return cfg
@@ -148,22 +154,6 @@ func (man Manager) addConfigString(key, defVal, usage string) {
 	man.addDefault(key, defVal)
 }
 
-func (man Manager) addConfigInt(key string, defVal int, usage string) {
-	man.command.PersistentFlags().Int(flagNameFromConfigKey(key), defVal, getFlagUsage(key, usage))
-	man.viper.BindPFlag(key, man.command.PersistentFlags().Lookup(flagNameFromConfigKey(key))) //nolint:errcheck
-	man.viper.BindEnv(key, envNameFromConfigKey(key))                                          //nolint:errcheck
-
-	man.addDefault(key, defVal)
-}
-
-func (man Manager) addConfigBool(key string, defVal bool, usage string) {
-	man.command.PersistentFlags().Bool(flagNameFromConfigKey(key), defVal, getFlagUsage(key, usage))
-	man.viper.BindPFlag(key, man.command.PersistentFlags().Lookup(flagNameFromConfigKey(key))) //nolint:errcheck
-	man.viper.BindEnv(key, envNameFromConfigKey(key))                                          //nolint:errcheck
-
-	man.addDefault(key, defVal)
-}
-
 func (man Manager) getConfigString(key string) string {
 	interfaceVal := man.getInterfaceVal(key)
 	stringVal, err := cast.ToStringE(interfaceVal)
@@ -174,6 +164,32 @@ func (man Manager) getConfigString(key string) string {
 	return stringVal
 }
 
+func (man Manager) addConfigStringArray(key string, defVal []string, usage string) {
+	man.command.PersistentFlags().StringArray(flagNameFromConfigKey(key), defVal, getFlagUsage(key, usage))
+	man.viper.BindPFlag(key, man.command.PersistentFlags().Lookup(flagNameFromConfigKey(key))) //nolint:errcheck
+	man.viper.BindEnv(key, envNameFromConfigKey(key))                                          //nolint:errcheck
+
+	man.addDefault(key, defVal)
+}
+
+func (man Manager) getConfigStringArray(key string) []string {
+	interfaceVal := man.getInterfaceVal(key)
+	stringVal, err := cast.ToStringSliceE(interfaceVal)
+	if err != nil {
+		panic("Unable to cast to string array for key " + key + ": " + err.Error())
+	}
+
+	return stringVal
+}
+
+func (man Manager) addConfigInt(key string, defVal int, usage string) {
+	man.command.PersistentFlags().Int(flagNameFromConfigKey(key), defVal, getFlagUsage(key, usage))
+	man.viper.BindPFlag(key, man.command.PersistentFlags().Lookup(flagNameFromConfigKey(key))) //nolint:errcheck
+	man.viper.BindEnv(key, envNameFromConfigKey(key))                                          //nolint:errcheck
+
+	man.addDefault(key, defVal)
+}
+
 func (man Manager) getConfigInt(key string) int {
 	interfaceVal := man.getInterfaceVal(key)
 	intVal, err := cast.ToIntE(interfaceVal)
@@ -182,6 +198,14 @@ func (man Manager) getConfigInt(key string) int {
 	}
 
 	return intVal
+}
+
+func (man Manager) addConfigBool(key string, defVal bool, usage string) {
+	man.command.PersistentFlags().Bool(flagNameFromConfigKey(key), defVal, getFlagUsage(key, usage))
+	man.viper.BindPFlag(key, man.command.PersistentFlags().Lookup(flagNameFromConfigKey(key))) //nolint:errcheck
+	man.viper.BindEnv(key, envNameFromConfigKey(key))                                          //nolint:errcheck
+
+	man.addDefault(key, defVal)
 }
 
 func (man Manager) getConfigBool(key string) bool {

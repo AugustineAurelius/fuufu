@@ -18,7 +18,6 @@ type Geolocator interface {
 func AuditMiddleware(geoClient Geolocator, db *event.CommandRepository, next http.Handler, excludedPath ...string) http.Handler {
 	slices.Sort(excludedPath)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		if _, ok := slices.BinarySearch(excludedPath, r.URL.Path); !ok {
 			eventRaw, err := geoClient.GetLocationRaw(strings.Split(r.RemoteAddr, ":")[0])
 			if err != nil {
