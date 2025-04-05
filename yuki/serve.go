@@ -1,21 +1,30 @@
 package yuki
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/AugustineAurelius/fuufu/yuki/converter"
 	skiplist "github.com/AugustineAurelius/fuufu/yuki/skip_list"
+	"github.com/AugustineAurelius/fuufu/yuki/wal"
 )
 
 func Run(host string, port int) {
 	list := skiplist.New()
 
+	wal, err := wal.OpenWAL()
+	if err != nil {
+		panic(err)
+	}
+
+	defer wal.Close()
+
 	r := http.NewServeMux()
 
 	registerRead(r, list)
-	registerAdd(r, list)
+	registerAdd(r, list, wal)
 
 	s := &http.Server{
 		Handler: r,
@@ -30,7 +39,8 @@ type put struct {
 	Value json.RawMessage `json:"value"`
 }
 
-func registerAdd(r *http.ServeMux, list *skiplist.SkipList) {
+func registerAdd(r *http.ServeMux, list *skiplist.SkipList, wal *wal.Wal) {
+
 	r.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(405)
@@ -46,13 +56,15 @@ func registerAdd(r *http.ServeMux, list *skiplist.SkipList) {
 		hashedKey := make([]byte, 32)
 		hashKey(converter.StringToBytes(put.Key), hashedKey)
 
-		flatedValue, err := flateEncode(put.Value)
-		if err != nil {
+		var buf bytes.Buffer
+		if err := flateEncode(put.Value, &buf); err != nil {
 			w.Write(converter.StringToBytes(err.Error()))
 			return
 		}
 
-		list.Put(hashedKey, flatedValue)
+		wal.Add(hashedKey, buf.Bytes())
+
+		list.Put(hashedKey, buf.Bytes())
 
 		w.WriteHeader(201)
 	})
