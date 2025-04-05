@@ -8,4 +8,5 @@ type Fuufu struct {
 	MinioConfig     Minio
 	ShieldConfig    Shield
 	SeverConfig     Server
+	YukiConfig      Yuki
 }

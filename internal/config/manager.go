@@ -75,6 +75,8 @@ func (man Manager) addConfigs() {
 	man.addConfigStringArray("server.authentication_exclude", []string{"/metrics", "/api/v1/auth/signup", "/api/v1/auth/signin"}, "paths which should be not authorized")
 	man.addConfigStringArray("server.geolocation_exclude", []string{"/metrics"}, "paths which should be not store events about geolocation")
 
+	man.addConfigString("yuki.host", "0.0.0.0", "default yuki host")
+	man.addConfigInt("yuki.port", 5555, "default yuki port")
 }
 
 func (man Manager) LoadConfig() Fuufu {
@@ -122,6 +124,10 @@ func (man Manager) LoadConfig() Fuufu {
 			Addr:                  man.getConfigString("server.address"),
 			AuthMiddlewareExclude: man.getConfigStringArray("server.authentication_exclude"),
 			GeoMiddlewareExclude:  man.getConfigStringArray("server.geolocation_exclude"),
+		},
+		YukiConfig: Yuki{
+			Host: man.getConfigString("yuki.host"),
+			Port: man.getConfigInt("yuki.port"),
 		},
 	}
 	return cfg
