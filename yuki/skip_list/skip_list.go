@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"math/rand/v2"
 	"sync/atomic"
+	"time"
 )
 
 type SkipList struct {
@@ -15,9 +16,10 @@ type SkipList struct {
 }
 
 type Node struct {
-	next  []atomic.Pointer[Node]
-	key   []byte
-	value []byte
+	next      []atomic.Pointer[Node]
+	key       []byte
+	value     []byte
+	timestamp time.Time
 }
 
 // Compare returns
@@ -127,8 +129,9 @@ func (sl *SkipList) randomHeight() int {
 
 func newNode(key, value []byte, height int) *Node {
 	return &Node{
-		key:   key,
-		value: value,
-		next:  make([]atomic.Pointer[Node], height),
+		key:       key,
+		value:     value,
+		next:      make([]atomic.Pointer[Node], height),
+		timestamp: time.Now().UTC(),
 	}
 }

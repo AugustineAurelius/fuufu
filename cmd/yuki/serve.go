@@ -3,6 +3,7 @@ package yuki
 import (
 	"github.com/AugustineAurelius/fuufu/internal/config"
 	"github.com/AugustineAurelius/fuufu/yuki"
+
 	"github.com/spf13/cobra"
 )
 
