@@ -12,6 +12,7 @@ func Test_StringToBytes(t *testing.T) {
 	strByte := []byte(str)
 
 	res := converter.StringToBytes(str)
+
 	require.Equal(t, strByte, res)
 }
 
