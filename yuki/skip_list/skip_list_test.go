@@ -29,7 +29,3 @@ func Test_Put(t *testing.T) {
 
 	assert.Equal(t, 101, i)
 }
-
-func Benchmark_Put(b *testing.B) {
-
-}

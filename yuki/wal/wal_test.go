@@ -35,20 +35,26 @@ func Test_WAL(t *testing.T) {
 	assert.Equal(t, 4, n)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint32(77), fullLen)
-	assert.Equal(t, expectedKey, hex.EncodeToString(info[4:36]))
+	assert.Equal(t, uint32(61), fullLen)
+
+	var timestamp int64
+	n, err = binary.Decode(info[4:12], binary.LittleEndian, &timestamp)
+	assert.Equal(t, 8, n)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedKey, hex.EncodeToString(info[12:44]))
 
 	var valueLen uint32
-	n, err = binary.Decode(info[36:40], binary.LittleEndian, &valueLen)
+	n, err = binary.Decode(info[44:48], binary.LittleEndian, &valueLen)
 	assert.Equal(t, 4, n)
 	require.NoError(t, err)
 	assert.Equal(t, uint32(9), valueLen)
 
-	assert.Equal(t, value, info[40:49])
+	assert.Equal(t, value, info[48:57])
 
 	crc := crc32.NewIEEE()
-	crc.Write(info[:49])
-	assert.Equal(t, crc.Sum(nil), info[49:53])
+	crc.Write(info[:57])
+	assert.Equal(t, crc.Sum(nil), info[57:61])
 
 	os.Remove(w.FileName())
 }

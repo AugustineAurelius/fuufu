@@ -3,7 +3,9 @@ package yuki
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"strconv"
 
 	"github.com/AugustineAurelius/fuufu/yuki/converter"
@@ -25,6 +27,7 @@ func Run(host string, port int) {
 
 	registerRead(r, list)
 	registerAdd(r, list, wal)
+	registerPprof(r)
 
 	s := &http.Server{
 		Handler: r,
@@ -62,7 +65,9 @@ func registerAdd(r *http.ServeMux, list *skiplist.SkipList, wal *wal.Wal) {
 			return
 		}
 
-		wal.Add(hashedKey, buf.Bytes())
+		if err := wal.Add(hashedKey, buf.Bytes()); err != nil {
+			slog.Error(err.Error())
+		}
 
 		list.Put(hashedKey, buf.Bytes())
 
@@ -116,4 +121,12 @@ func registerRead(r *http.ServeMux, list *skiplist.SkipList) {
 		w.Write(data)
 	})
 
+}
+
+func registerPprof(r *http.ServeMux) {
+	r.HandleFunc("GET /debug/pprof/", pprof.Index)
+	r.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+	r.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	r.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+	r.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 }
