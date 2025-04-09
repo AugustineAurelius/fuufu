@@ -53,8 +53,8 @@ func Test_WAL(t *testing.T) {
 	assert.Equal(t, value, info[48:57])
 
 	crc := crc32.NewIEEE()
-	crc.Write(info[4 : len(info)-4])
-	assert.Equal(t, crc.Sum(nil), info[len(info)-4:])
+	crc.Write(info[4 : fullLen-4])
+	assert.Equal(t, crc.Sum(nil), info[fullLen-4:fullLen])
 
 	os.Remove(w.FileName())
 }

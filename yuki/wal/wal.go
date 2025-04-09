@@ -112,8 +112,9 @@ func (w *Wal) FillMemtable(memtable memtable) error {
 	defer f.Close()
 
 	var n int
+	recordLenBuf := make([]byte, 4)
+	buf := make([]byte, 128)
 	for err != io.EOF || n == 0 {
-		recordLenBuf := make([]byte, 4)
 		n, err = io.ReadFull(f, recordLenBuf)
 		if err != nil {
 			if n == 0 {
@@ -127,8 +128,13 @@ func (w *Wal) FillMemtable(memtable memtable) error {
 		if err != nil {
 			return fmt.Errorf("decode recordLen: %w", err)
 		}
-		buf := make([]byte, recordLen-4)
-		n, err = io.ReadFull(f, buf)
+
+		if recordLen > uint32(len(buf)) {
+			buf = make([]byte, int(recordLen)-4)
+		}
+
+		bufReqLen := int(recordLen) - 4
+		n, err = io.ReadAtLeast(f, buf, bufReqLen)
 		if err != nil && err != io.EOF {
 			if n == 0 {
 				return nil
@@ -137,14 +143,14 @@ func (w *Wal) FillMemtable(memtable memtable) error {
 		}
 
 		crc := crc32.NewIEEE()
-		crc.Write(buf[:len(buf)-4])
+		crc.Write(buf[:bufReqLen-4])
 
-		if !reflect.DeepEqual(buf[len(buf)-4:], crc.Sum(nil)) {
+		if !reflect.DeepEqual(buf[bufReqLen-4:bufReqLen], crc.Sum(nil)) {
 			return errors.New("crc not equal")
 		}
 
 		key := buf[8:40]
-		val := buf[44 : len(buf)-4]
+		val := buf[44 : bufReqLen-4]
 		memtable.Put(key, val)
 	}
 
