@@ -1,6 +1,7 @@
 package bloom_test
 
 import (
+	"crypto/sha256"
 	"testing"
 
 	"github.com/AugustineAurelius/fuufu/yuki/bloom"
@@ -18,7 +19,9 @@ func Test_Filter(t *testing.T) {
 
 func Benchmark_Filter(b *testing.B) {
 	filter := bloom.NewFilter(bloom.NewBitSet(), 1_000_000, 64)
-	data := []byte("test data")
+	hash := sha256.New()
+	hash.Write([]byte("test data"))
+	data := hash.Sum(nil)
 
 	for i := 0; i < b.N; i++ {
 		filter.Add(data)

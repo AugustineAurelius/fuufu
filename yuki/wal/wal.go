@@ -3,8 +3,14 @@ package wal
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"hash/crc32"
+	"io"
 	"os"
+	"reflect"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -58,11 +64,88 @@ func (w *Wal) Add(key, value []byte) error {
 	}
 	buf.Write(value)
 
-	crc.Write(buf.Bytes())
+	crc.Write(buf.Bytes()[4:])
 	buf.Write(crc.Sum(nil))
 
 	if _, err := w.f.Write(buf.Bytes()); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+type memtable interface {
+	Put(key, value []byte)
+}
+
+func (w *Wal) FillMemtable(memtable memtable) error {
+	dirEntries, err := os.ReadDir(".")
+	if err != nil {
+		return err
+	}
+
+	walFiles := make([]string, 0, 16)
+	for _, entry := range dirEntries {
+		if strings.Contains(entry.Name(), ".txt") {
+			walFiles = append(walFiles, entry.Name())
+		}
+	}
+
+	if len(walFiles) < 2 {
+		return nil
+	}
+
+	slices.SortFunc(walFiles, func(a, b string) int {
+		if a < b {
+			return 1
+		}
+		if a > b {
+			return -1
+		}
+		return 0
+	})
+
+	f, err := os.OpenFile(walFiles[1], os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var n int
+	for err != io.EOF || n == 0 {
+		recordLenBuf := make([]byte, 4)
+		n, err = io.ReadFull(f, recordLenBuf)
+		if err != nil {
+			if n == 0 {
+				return nil
+			}
+			return fmt.Errorf("read recordLen: %w", err)
+		}
+
+		var recordLen uint32
+		_, err = binary.Decode(recordLenBuf, binary.LittleEndian, &recordLen)
+		if err != nil {
+			return fmt.Errorf("decode recordLen: %w", err)
+		}
+		buf := make([]byte, recordLen-4)
+		n, err = io.ReadFull(f, buf)
+		if err != nil && err != io.EOF {
+			if n == 0 {
+				return nil
+			}
+			return fmt.Errorf("read full record buf %w", err)
+		}
+
+		crc := crc32.NewIEEE()
+		crc.Write(buf[:len(buf)-4])
+
+		if !reflect.DeepEqual(buf[len(buf)-4:], crc.Sum(nil)) {
+			return errors.New("crc not equal")
+		}
+
+		key := buf[8:40]
+		val := buf[44 : len(buf)-4]
+		memtable.Put(key, val)
 	}
 
 	return nil

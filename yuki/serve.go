@@ -3,6 +3,7 @@ package yuki
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -20,8 +21,11 @@ func Run(host string, port int) {
 	if err != nil {
 		panic(err)
 	}
-
 	defer wal.Close()
+
+	if err = wal.FillMemtable(list); err != nil {
+		fmt.Println(err)
+	}
 
 	r := http.NewServeMux()
 
