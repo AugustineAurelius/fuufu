@@ -1,10 +1,14 @@
 package test
 
 import (
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/AugustineAurelius/fuufu/internal/config"
 	"github.com/AugustineAurelius/fuufu/pkg/logger"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +25,49 @@ func CreateCMD(manager *config.Manager) *cobra.Command {
 
 	testCMD := &cobra.Command{
 		Use: "test",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := &server.Options{}
+
+			// Initialize new server with options
+			ns, err := server.NewServer(opts)
+			if err != nil {
+				panic(err)
+			}
+
+			// Start the server via goroutine
+			go ns.Start()
+
+			// Wait for server to be ready for connections
+			if !ns.ReadyForConnections(4 * time.Second) {
+				panic("not ready for connection")
+			}
+
+			// Connect to server
+			nc, err := nats.Connect(ns.ClientURL())
+
+			if err != nil {
+				panic(err)
+			}
+
+			subject := "my-subject"
+
+			// Subscribe to the subject
+			nc.Subscribe(subject, func(msg *nats.Msg) {
+				// Print message data
+				data := string(msg.Data)
+				fmt.Println(data)
+
+				// Shutdown the server (optional)
+				ns.Shutdown()
+			})
+
+			// Publish data to the subject
+			nc.Publish(subject, []byte("Hello embedded NATS!"))
+
+			// Wait for server shutdown
+			ns.WaitForShutdown()
+			return nil
+		},
 	}
 
 	testCMD.AddCommand(createAuthCMD(manager), createTodoCMD(manager))

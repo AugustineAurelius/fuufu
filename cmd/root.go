@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/AugustineAurelius/fuufu/cmd/test"
-	"github.com/AugustineAurelius/fuufu/cmd/yuki"
 	"github.com/AugustineAurelius/fuufu/internal/config"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -22,7 +21,7 @@ func Execute() {
 
 	manager := config.NewManager(rootCmd)
 
-	rootCmd.AddCommand(createServeCMD(manager), createMigrateCMD(manager), test.CreateCMD(manager), yuki.CreateCMD(manager))
+	rootCmd.AddCommand(createServeCMD(manager), createMigrateCMD(manager), test.CreateCMD(manager))
 
 	err := rootCmd.Execute()
 	if err != nil {
